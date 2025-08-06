@@ -40,7 +40,7 @@
           <el-button type="primary" @click="history">打开算法历史运行记录</el-button>
         </el-form-item>
       </el-form>
-      <el-drawer :visible.sync="drawer" :direction="direction" size="70%">
+      <el-drawer v-model="drawer" :direction="direction" size="70%">
         <el-table :data="tableData" stripe class="tableLimit">
           <el-table-column prop="input" label="算法输入"></el-table-column>
           <el-table-column prop="output" label="算法输出" :show-overflow-tooltip='true'></el-table-column>
@@ -132,7 +132,10 @@ const getInput = (msg: any) => {
   //设置输入变量
   form.value.input = form.value.input.map((item: any) => {
     if (item.type == "2") {
-      item.value = item.value.join(",");
+      console.log(item.value)
+      if (item.value.length > 1) {
+        item.value = item.value.join(",");
+      }
     }
     return item;
   });
@@ -267,6 +270,8 @@ const reviseAlo = () => {
     var alo = {
       id: row.value.id,
       formula: form.value.con,
+      input: form.value.input,
+      output: form.value.output
     }
     console.log(alo);
     socket.value.send(JSON.stringify(alo));
@@ -278,7 +283,7 @@ const reviseAlo = () => {
 }
 
 // ---- 核心修改：使用 watch 替代 onMounted 中的逻辑 ----
-watch(() => route.query.id, (newId, oldId) => {
+watch(() => route.query.id, (newId: any, oldId: any) => {
   if (newId && newId !== oldId) {
     console.log("路由 ID 从", oldId, "变为", newId);
     id.value = newId as string;

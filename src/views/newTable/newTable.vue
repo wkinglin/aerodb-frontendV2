@@ -1,47 +1,41 @@
 <template>
   <div>
     <el-card class="box-card">
-      <div slot="header" class="clearfix">
-        <el-button type=primary @click="creatTables()" style="float: left;margin-top:4px">新建数据库</el-button>
-        <!-- <el-button type=primary @click="deleteTables()" style="float: left;margin-top:4px">删除数据库</el-button> -->
-        <el-button type=primary plain @click="seeAll()" style="float:right;margin-top:4px">取消</el-button>
-        <el-button type=primary @click="searchTables()" style="float:right;margin-top:4px">
-          <el-icon>
-            <Search />
-          </el-icon>
-          搜索
-        </el-button>
-        <el-input type="input" placeholder="请输入数据库名称" v-model="search"
-          style="width:auto;float:right;margin-left:1%;margin-right: 1%"></el-input>
-      </div>
-      <el-table :data="this.$store.state.tableData" style="font-size: 18px" border stripe>
-        <el-table-column prop="name" label="数据库名称"></el-table-column>
-        <el-table-column label="操作" width="200">
-          <el-button type=primary @click="watchTables(index)" style="margin-top:4px">查看数据库</el-button>
-        </el-table-column>
-      </el-table>
-      <lazy-render :data="this.tableData" :time="300" :limit="1" track-by-data>
-        <div v-for="(item, index) in this.tableData" :key="index" class="text">
-          <div class="item">
-            <div>{{ item.name }}</div>
-            <div>
-              <el-button type=primary @click="watchTables(index)" style="margin-top:4px">查看数据库</el-button>
-              <el-button type=primary @click="changeTablesName(index)" style="margin-top:4px">修改数据库名字</el-button>
-              <el-button type=primary @click="deleteRows(index)" style="margin-top:4px">删除</el-button>
-            </div>
-          </div>
-          <el-divider></el-divider>
+      <template #header>
+        <div class="clearfix">
+          <el-button type="primary" @click="creatTables()" style="float: left;margin-top:4px">新建数据库</el-button>
+          <!-- <el-button type="primary" @click="deleteTables()" style="float: left;margin-top:4px">删除数据库</el-button> -->
+          <el-button type="primary" plain @click="seeAll()" style="float:right;margin-top:4px">取消</el-button>
+          <el-button type="primary" @click="searchTables()" style="float:right;margin-top:4px">
+            <el-icon>
+              <Search />
+            </el-icon>
+            搜索
+          </el-button>
+          <el-input type="input" placeholder="请输入数据库名称" v-model="search"
+            style="width:auto;float:right;margin-left:1%;margin-right: 1%"></el-input>
         </div>
-      </lazy-render>
+      </template>
+      <div v-for="(item, index) in tableData" :key="index" class="text">
+        <div class="item">
+          <div>{{ item.name }}</div>
+          <div>
+            <el-button type="primary" @click="watchTables(index)" style="margin-top:4px">查看数据库</el-button>
+            <el-button type="primary" @click="changeTablesName(index)" style="margin-top:4px">修改数据库名字</el-button>
+            <el-button type="primary" @click="deleteRows(index)" style="margin-top:4px">删除</el-button>
+          </div>
+        </div>
+        <el-divider></el-divider>
+      </div>
     </el-card>
 
-    <el-dialog title="改名" :visible.sync="dialogVisible" width="50%" :before-close="handleClose">
+    <el-dialog title="改名" v-model="dialogVisible" width="50%" :before-close="handleClose">
       <el-form>
         <el-form-item prop="name" :rules="rule">
           <el-input v-model="name" placeholder="请输入名称"></el-input>
         </el-form-item>
       </el-form>
-      <span slot="footer">
+      <span>
         <el-button @click="dialogVisible = false">取 消</el-button>
         <el-button type="primary" @click="onSubmitName()">确 定</el-button>
       </span>
@@ -50,180 +44,163 @@
   </div>
 </template>
 
-<script>
-import Table from '@/components/Table/index.vue'
+<script setup lang="ts">
+import { ref, reactive, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import globalWebSocket from '@/global'
+import { useMainStore } from '@/store'
 
-export default {
-  data() {
-    return {
-      tablenumbers: 0,
-      tableName: [],
-      search: '',
-      dialogVisible: false,
-      name: "",
-      index: 0,
-      rule: {
-        name: [{ required: true, message: '名称不能为空' }],
-      },
-      tableData: [],
+// 响应式数据
+const tablenumbers = ref(0)
+const search = ref('')
+const dialogVisible = ref(false)
+const name = ref('')
+const index = ref(0)
+const tableData = ref([] as any[])
+
+// 表单验证规则
+const rule = reactive({
+  name: [{ required: true, message: '名称不能为空' }]
+})
+
+// 获取路由和store实例
+const router = useRouter()
+const store = useMainStore()
+
+// 初始化socket
+const socket = ref<WebSocket | null>(null)
+
+// 组件挂载时初始化
+onMounted(() => {
+  init()
+  send("getAllUserTables")
+})
+
+// 发送数据函数
+const send = (ms: string) => {
+  if (socket.value) {
+    socket.value.send(ms);
+  }
+}
+
+const init = () => {
+  // 实例化socket
+  socket.value = globalWebSocket.ws as WebSocket;
+  // 监听socket消息
+  if (socket.value) {
+    socket.value.onmessage = getMessage
+  }
+}
+
+//接收数据
+const getMessage = (msg: any) => {
+  var arr = []
+  arr = eval(msg.data)
+  var l = arr.length
+
+  for (var i = 0; i < l; i++) {
+    var f = 1
+    if (store.tableData.length > 1) {
+      for (var j = 0; j < store.tableData.length; j++) {
+        if (store.tableData[j].name == arr[i]) {
+          f = 0
+        }
+      }
     }
-  },
-  components: {
-    // Table,
-  },
-  mounted() {
-    //初始化
-    this.init();
-    this.send("getAllUserTables");
-  },
+    if (f == 0) continue
+    //增加数据库
+    store.increment()
+    //修改数据库名字
+    store.changeTableName({
+      i: i,
+      name: arr[i],
+    })
+    //取消显示设置表单
+    store.changeTableValid({
+      i: i,
+      valid: false,
+    })
+  }
+  store.newTableValible = false
 
-  methods: {
-    init() {
-      // 实例化socket
-      this.socket = this.global.ws
-      // 监听socket连接
-      this.socket.onopen = this.open;
-      // 监听socket错误信息
-      this.socket.onerror = this.error;
-      // 监听socket消息
-      this.socket.onmessage = this.getMessage;
-    },
-    open() {
-      console.log("socket连接成功");
-    },
-    // socket连接失败
-    error() {
-      console.log("连接错误");
-    },
-    // 发送数据
-    send(ms) {
-      this.socket.send(ms);
-    },
-    close: function () {
-      this.send("close");
-      console.log("socket已经关闭")
-    },
-    //接收数据
-    getMessage(msg) {
-      var arr = [];
-      arr = eval(msg.data)
-      var l = arr.length;
+  tableData.value = store.tableData
+}
 
-      for (var i = 0; i < l; i++) {
-        var f = 1;
-        // console.log(this.$store.state.tableData);
-        // console.log("长度"+this.$store.state.tableData.length);
-        if (this.$store.state.tableData.length > 1) {
-          for (var j = 0; j < this.$store.state.tableData.length; j++) {
-            if (this.$store.state.tableData[j].name == arr[i]) {
-              f = 0;
-            }
-          }
-        }
-        if (f == 0) continue;
-        //增加数据库
-        this.$store.commit("increment", this.$store.state);
-        //修改数据库名字
-        this.$store.commit({
-          type: 'changeTableName',
-          i: i,
-          name: arr[i],
-        });
-        //取消显示设置表单
-        this.$store.commit({
-          type: "changeTableValid",
-          i: i,
-          valid: false,
-        });
-      }
-      this.$store.state.newTableValible = false;
+const creatTables = () => {
+  tablenumbers.value++
+  store.increment()
+}
 
-      // for(var i=0;i<l;i++){
-      //   this.tableData.push({
-      //     name:arr[i],
-      //   });
-      // }
+const deleteTables = () => {
+  tablenumbers.value--
+  store.decrement()
+}
 
-      this.tableData = this.$store.state.tableData;
-      console.log(this.tableData);
+const watchTables = (row: number) => {
+  router.push({
+    path: `table`,
+    query: {
+      table_id: row + 1
+    }
+  })
+}
 
-    },
-    creatTables() {
-      this.tablenumbers++;
-      this.$store.commit("increment", this.$store.state)
-    },
-    deleteTables() {
-      this.tablenumbers--;
-      this.$store.commit("decrement", this.$store.state);
+const changeTablesName = (idx: number) => {
+  dialogVisible.value = true
+  index.value = idx
+}
 
-    },
-    watchTables(row) {
-      console.log(this.$store.state.tableData[row]);
-      this.$store.state.row = row + 1;
-      this.$router.push({
-        path: `table`,
-      })
-    },
-    changeTablesName(index) {
-      this.dialogVisible = true;
-      this.index = index;
-    },
-    onSubmitName() {
-      console.log(this.index);
-      this.send("changeTableName");
-      var s = {
-        oldname: this.$store.state.tableData[this.index].name,
-        newname: this.name,
-      }
-      this.send(JSON.stringify(s));
-      this.$store.commit({
-        type: 'changeTableName',
-        i: this.index,
-        name: this.name,
-      });
-      this.dialogVisible = false;
-    },
-    searchTables() {
-      this.tableData = [];
-      for (var i = 0; i < this.$store.state.tableData.length; i++) {
-        if (this.$store.state.tableData[i].name.startsWith(this.search)) {
-          this.tableData.push(this.$store.state.tableData[i]);
-        }
-      }
-    },
-    handleClose(done) {
-      this.$confirm('确认关闭？')
-        .then(_ => {
-          done();
-        })
-        .catch(_ => { });
-    },
-    seeAll() {
-      this.tableData = this.$store.state.tableData;
-      this.search = "";
-    },
-    deleteRows(index) {
-      console.log(index);
-      console.log(this.$store.state.tableData[index].name);
-      //向后端传递删除信息
-      var UserTable = {
-        name: this.$store.state.tableData[index].name,
-      }
-      this.send("deleteUserTable");
-      this.send(JSON.stringify(UserTable));
+const onSubmitName = () => {
+  send("changeTableName")
+  var s = {
+    oldname: store.tableData[index.value].name,
+    newname: name.value,
+  }
+  send(JSON.stringify(s))
+  store.changeTableName({
+    i: index.value,
+    name: name.value,
+  })
+  dialogVisible.value = false
+}
 
-      //执行删除操作
-      this.$store.commit({
-        type: 'deleteTableData',
-        i: index,
-      });
-      this.$message({
-        message: '删除成功',
-        type: 'success'
-      });
-
+const searchTables = () => {
+  tableData.value = []
+  for (var i = 0; i < store.tableData.length; i++) {
+    if (store.tableData[i].name.startsWith(search.value)) {
+      tableData.value.push(store.tableData[i])
     }
   }
+}
+
+const handleClose = (done: any) => {
+  ElMessageBox.confirm('确认关闭？').then(() => {
+    done()
+  }).catch(() => { })
+}
+
+const seeAll = () => {
+  tableData.value = store.tableData
+  search.value = ""
+}
+
+const deleteRows = (idx: number) => {
+  //向后端传递删除信息
+  var UserTable = {
+    name: store.tableData[idx].name,
+  }
+  send("deleteUserTable")
+  send(JSON.stringify(UserTable))
+
+  //执行删除操作
+  store.deleteTableData({
+    i: idx,
+  })
+  ElMessage({
+    message: '删除成功',
+    type: 'success'
+  })
 }
 </script>
 

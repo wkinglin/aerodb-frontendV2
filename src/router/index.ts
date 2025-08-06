@@ -2,7 +2,7 @@
 import { createRouter, createWebHashHistory } from "vue-router";
 import Layout from '../layout/index.vue'
 import Dashboard from '../views/dashboard/index.vue'
-import AlgTable from '../views/aloTable/table.vue'
+import AlgTable from '../views/aloTable/aloTable.vue'
 import Alg from '../views/aloTable/alo.vue'
 import NewTable from '../views/newTable/newTable.vue'
 import table from '../views/newTable/Table.vue'

@@ -1,7 +1,7 @@
 const globalWebSocket = {
     ws: null as WebSocket | null,
 
-    path: "ws://127.0.0.1:9090/",
+    path: "ws://127.0.0.1:9091/",
 
     setWs(newWs: WebSocket) {
         this.ws = newWs
