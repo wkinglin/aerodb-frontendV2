@@ -48,4 +48,5 @@ export default defineConfig({
       plugins: [tailwindcss, autoprefixer],
     },
   },
+  assetsInclude: ['**/*.pdf'], // 确保PDF文件被当作资产处理
 })

@@ -2,9 +2,16 @@
     <div id="main">
         <el-card class="box-card">
             <template #header>
-                <div class="clearfix">
-                    <el-button type="primary" @click="newAlo" style="float: left;margin-top:4px">创建算法</el-button>
-                    <el-button type="primary" @click="exportAlo()" style="float: left;margin-top:4px">导出算法库</el-button>
+                <div class="card-header">
+                    <h3 class="card-title">算法管理</h3>
+                    <div class="card-actions">
+                        <el-button type="primary" @click="newAlo" :icon="Plus">
+                            创建算法
+                        </el-button>
+                        <el-button type="success" @click="exportAlo()" :icon="Download">
+                            导出算法库
+                        </el-button>
+                    </div>
                 </div>
             </template>
             <HotTable class="ht" ref="hot" :settings="hotSettings" :data="hotData"></HotTable>
@@ -13,55 +20,50 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue';
-import { useRouter } from 'vue-router';
-import { ElMessageBox } from 'element-plus';
-import { useAlgorithmStore } from '../../store/algorithm';
-import globalWebSocket from '../../global';
-
+import { ref, onMounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
+import { ElMessageBox, ElMessage } from 'element-plus'
+import { Plus, Download } from '@element-plus/icons-vue'
+import { useWebSocket } from '@/composables/useWebSocket'
 
 // handsontable
-import { HotTable } from '@handsontable/vue3';
-import { registerAllModules } from 'handsontable/registry';
-import 'handsontable/styles/handsontable.min.css';
-import 'handsontable/styles/ht-theme-main.min.css';
+import { HotTable } from '@handsontable/vue3'
+import { registerAllModules } from 'handsontable/registry'
+import 'handsontable/styles/handsontable.min.css'
+import 'handsontable/styles/ht-theme-main.min.css'
 
-// register Handsontable's modules
-registerAllModules();
+registerAllModules()
 
-
-const router = useRouter();
-
-// 数据状态
-const socket = ref<WebSocket | null>(null)
+const router = useRouter()
+const { sendCommand, setMessageHandler } = useWebSocket()
 
 // Refs
-const hot = ref<any>(null);
-const hotData = ref<any[]>([]);
-const message = ref("");
-const json = ref<any>("");
+const hot = ref<any>(null)
+const hotData = ref<any[]>([])
+const algorithms = ref<any[]>([])
 
 // Lifecycle hooks
-onMounted(() => {
-    nextTick(() => {
-        if (hot.value?.hotInstance) {
-            hot.value.hotInstance.addHook('afterOnCellMouseDown', (_event: any, coords: any, _td: any) => {
-                callBackMD(coords);
-            });
-        }
-        initSocket();
-    });
-    globalWebSocket.ws?.send("findAll");
-});
+onMounted(async () => {
+    await initializeComponent()
+})
 
-// 使用全局 WebSocket 实例
-const initSocket = () => {
-    // 直接使用全局 WebSocket 实例
-    socket.value = globalWebSocket.ws as WebSocket
+const initializeComponent = async () => {
+    await nextTick()
 
-    // 只设置消息处理函数，其他事件已在全局初始化
-    if (socket.value) {
-        socket.value.onmessage = getMessage
+    if (hot.value?.hotInstance) {
+        hot.value.hotInstance.addHook('afterOnCellMouseDown', (_event: any, coords: any) => {
+            handleCellClick(coords)
+        })
+    }
+
+    // 设置WebSocket消息处理
+    setMessageHandler(handleMessage)
+
+    // 请求数据
+    if (sendCommand("findAll")) {
+        console.log("算法数据请求已发送")
+    } else {
+        ElMessage.error("WebSocket未连接，无法获取数据")
     }
 }
 
@@ -105,128 +107,262 @@ const hotSettings = ref<any>({
     },
 });
 
-// 接收消息
-const getMessage = (msg: MessageEvent) => {
-    message.value = msg.data;
-    console.log("==websocket接收数据==");
-    // console.log(msg.data);
-    json.value = eval(msg.data);
-    const l = json.value.length - hotData.value.length;
-    for (let i = 0; i < l; i++) {
-        hotData.value.push([]);
+// 接收消息处理
+const handleMessage = (msg: MessageEvent) => {
+    try {
+        algorithms.value = JSON.parse(msg.data)
+        updateTableData()
+        console.log("算法数据更新成功")
+    } catch (error) {
+        console.error("解析算法数据失败:", error)
+        ElMessage.error("数据格式错误")
     }
-    for (let i = 0; i < json.value.length; i++) {
-        hotData.value[i] = hotData.value[i] || [];
-        hotData.value[i][0] = json.value[i].name;
-        hotData.value[i][1] = json.value[i].formula;
-        hotData.value[i][2] = '执行';
-        hotData.value[i][3] = '删除';
-    }
-};
+}
 
-const callBackMD = (coords: any) => {
-    const row = coords.row;  // 获取行号和列号
-    const col = coords.col;
-    if (col == 2 && row != -1 && hot.value?.hotInstance) {
-        ElMessageBox.confirm("确定调用此算法？", "提示", {
+// 更新表格数据
+const updateTableData = () => {
+    const dataLength = algorithms.value.length
+    const currentLength = hotData.value.length
+
+    // 调整数组长度
+    if (dataLength > currentLength) {
+        for (let i = currentLength; i < dataLength; i++) {
+            hotData.value.push([])
+        }
+    } else if (dataLength < currentLength) {
+        hotData.value.splice(dataLength)
+    }
+
+    // 填充数据
+    algorithms.value.forEach((algorithm, index) => {
+        hotData.value[index] = [
+            algorithm.name || '',
+            algorithm.formula || '',
+            '执行',
+            '删除'
+        ]
+    })
+}
+
+// 处理单元格点击
+const handleCellClick = (coords: any) => {
+    const { row, col } = coords
+
+    if (row === -1 || !algorithms.value[row]) return
+
+    const algorithm = algorithms.value[row]
+
+    switch (col) {
+        case 2: // 执行算法
+            handleExecuteAlgorithm(algorithm)
+            break
+        case 3: // 删除算法
+            handleDeleteAlgorithm(algorithm, row)
+            break
+    }
+}
+
+// 处理执行算法
+const handleExecuteAlgorithm = async (algorithm: any) => {
+    try {
+        await ElMessageBox.confirm("确定调用此算法？", "提示", {
             confirmButtonText: '确定',
             cancelButtonText: '取消',
-        }).then(() => {
-            router.push({
-                path: `/alg`,
-                query: {
-                    id: json.value[row].id
-                }
-            });
-            console.log("table", json.value[row].id);
-        }).catch(() => {
-            // 取消操作
-        });
+        })
+
+        router.push({
+            path: '/alg',
+            query: { id: algorithm.id }
+        })
+
+        console.log("跳转到算法执行页面:", algorithm.id)
+    } catch {
+        // 用户取消操作
     }
-    if (col == 3 && row != -1) {
-        ElMessageBox.confirm("确定删除此算法？", "提示", {
+}
+
+// 处理删除算法
+const handleDeleteAlgorithm = async (algorithm: any, row: number) => {
+    try {
+        await ElMessageBox.confirm("确定删除此算法？", "提示", {
             confirmButtonText: '确定',
             cancelButtonText: '取消',
             type: 'warning',
-        }).then(() => {
-            const Alo = {
-                id: json.value[row].id
-            };
-            globalWebSocket.ws?.send("deleteAlo");
-            globalWebSocket.ws?.send(JSON.stringify(Alo));
-            if (hot.value?.hotInstance) {
-                hot.value.hotInstance.alter('remove_row', row);
-            }
-        }).catch(() => {
-            // 取消操作
-        });
+        })
+
+        const deleteData = { id: algorithm.id }
+
+        if (sendCommand("deleteAlo", deleteData)) {
+            hot.value?.hotInstance?.alter('remove_row', row)
+            algorithms.value.splice(row, 1)
+            ElMessage.success("算法删除成功")
+        } else {
+            ElMessage.error("删除失败，网络连接异常")
+        }
+    } catch {
+        // 用户取消操作
     }
-};
-
-const exportAlo = () => {
-    if (hot.value?.hotInstance) {
-        const exportPlugin = hot.value.hotInstance.getPlugin('exportFile');
-        exportPlugin.downloadFile('csv', { filename: 'MyFile' });
-    }
-};
-
-const newAlo = () => {
-    router.push({ path: `/create` });
-};
-</script>
-
-<style>
-.ht {
-    margin-left: auto;
-    margin-right: auto;
-    margin-bottom: auto;
 }
 
+// 导出算法库
+const exportAlo = () => {
+    if (!hot.value?.hotInstance) {
+        ElMessage.error("表格未初始化")
+        return
+    }
+
+    const exportPlugin = hot.value.hotInstance.getPlugin('exportFile')
+    exportPlugin.downloadFile('csv', {
+        filename: `算法库_${new Date().toLocaleDateString()}`
+    })
+    ElMessage.success("算法库导出成功")
+}
+
+// 创建新算法
+const newAlo = () => {
+    router.push({ path: '/create' })
+}
+</script>
+
+<style scoped>
+/* 页面主容器 */
+#main {
+    padding: 20px;
+    background-color: #f5f7fa;
+    min-height: calc(100vh - 120px);
+}
+
+/* 卡片样式 */
+.box-card {
+    border-radius: 8px;
+    box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+    border: 1px solid #ebeef5;
+    background-color: #fff;
+}
+
+/* Card Header 样式 */
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0;
+    margin: 0;
+}
+
+.card-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #303133;
+    margin: 0;
+    font-family: "微软雅黑", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+.card-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.card-actions .el-button {
+    font-size: 14px;
+    padding: 8px 16px;
+    border-radius: 6px;
+    transition: all 0.3s ease;
+}
+
+.card-actions .el-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* 表格容器样式 */
+.ht {
+    margin: 0;
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+}
+</style>
+
+<style>
+/* Handsontable 全局样式 */
 .handsontable .cellStyle {
     vertical-align: middle !important;
     background: #fff;
-    /* font--size:16px */
+    font-size: 14px;
+    font-family: "微软雅黑";
+    color: #606266;
 }
 
 .handsontable .cellStyleEven {
     vertical-align: middle !important;
-    /* background: #eee; */
-    /* font--size:16px */
+    background: #fafafa;
+    font-size: 14px;
+    font-family: "微软雅黑";
+    color: #606266;
 }
 
 .handsontable .linkhoverStyle {
-    font-size: 16px;
+    font-size: 14px;
     font-family: "微软雅黑";
-    color: #397cf6 ! important;
+    color: #409EFF !important;
     text-align: center;
     vertical-align: middle !important;
     background-color: #fff;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.handsontable .linkhoverStyle:hover {
+    background-color: #ecf5ff !important;
+    color: #337ecc !important;
 }
 
 .handsontable .linkhoverStyleEven {
-    font-size: 16px;
+    font-size: 14px;
     font-family: "微软雅黑";
-    color: #397cf6 ! important;
+    color: #409EFF !important;
     text-align: center;
     vertical-align: middle !important;
-    /* background: #eee; */
+    background: #fafafa;
+    cursor: pointer;
+    transition: all 0.2s ease;
 }
 
-.handsontable .odd {
-    font-size: 16px;
-    font-family: "微软雅黑";
-    color: #fff;
-    text-align: center;
-    vertical-align: middle;
-    background: #397cf6;
+.handsontable .linkhoverStyleEven:hover {
+    background-color: #ecf5ff !important;
+    color: #337ecc !important;
 }
 
 .ht .handsontable table thead th {
-    font-size: 16px;
+    font-size: 15px;
     font-family: "微软雅黑";
     color: #fff;
     text-align: center;
     vertical-align: middle;
-    background: #3399ff;
+    background: linear-gradient(135deg, #409EFF 0%, #337ecc 100%);
+    font-weight: 600;
+    padding: 12px 8px;
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.ht .handsontable table thead th:last-child {
+    border-right: none;
+}
+
+/* 表格整体样式优化 */
+.ht .handsontable table {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.ht .handsontable table td {
+    border-right: 1px solid #ebeef5;
+    border-bottom: 1px solid #ebeef5;
+    padding: 10px 8px;
+}
+
+.ht .handsontable table tbody tr:hover td {
+    background-color: #f5f7fa !important;
 }
 </style>

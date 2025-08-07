@@ -13,9 +13,9 @@
 <script lang="ts" setup>
 import { ref, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAlgorithmStore } from '../../store/algorithm'
+// import { useAlgorithmStore } from '../../store/algorithm'
 
-import global from '@/global'
+import globalWebSocket from '@/global'
 
 // 1. 从主入口一次性导入
 import { Tabulator, ResponsiveLayoutModule, SortModule, FilterModule, PageModule, DownloadModule, SelectRowModule, EditModule } from 'tabulator-tables';
@@ -34,7 +34,7 @@ Tabulator.registerModule([
 
 // 路由和状态管理
 const router = useRouter()
-const algorithmStore = useAlgorithmStore()
+// const algorithmStore = useAlgorithmStore()
 
 // 表格引用
 const tableRef = ref<HTMLElement | null>(null)
@@ -62,7 +62,7 @@ onMounted(() => {
 // 使用全局 WebSocket 实例
 const initSocket = () => {
   // 直接使用全局 WebSocket 实例
-  socket.value = global.ws as WebSocket
+  socket.value = globalWebSocket.ws as WebSocket
 
   // 只设置消息处理函数，其他事件已在全局初始化
   if (socket.value) {

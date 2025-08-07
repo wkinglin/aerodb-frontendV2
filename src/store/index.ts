@@ -2,12 +2,14 @@ import { defineStore } from 'pinia'
 
 // 定义表格数据接口
 interface TableItem {
+    id: string;
     name: string;
     valid: boolean;
     headers: any[];
     headersType: any[];
     colnum: number;
     rownum: number;
+    createdAt: Date;
 }
 
 // 定义主 store
@@ -30,14 +32,17 @@ export const useMainStore = defineStore('main', {
     actions: {
         increment() {
             this.count++
-            this.tableData.push({
+            const newTable: TableItem = {
+                id: `table_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
                 name: "表格" + this.count,
                 valid: true,
                 headers: [],
                 headersType: [],
                 colnum: 0,
                 rownum: 0,
-            })
+                createdAt: new Date(),
+            }
+            this.tableData.push(newTable)
         },
 
         decrement() {
@@ -91,6 +96,40 @@ export const useMainStore = defineStore('main', {
 
         changeSysAndProId(value: any) {
             this.sysAndProId = value
+        },
+
+        // 根据ID查找表格
+        findTableById(id: string): TableItem | undefined {
+            return this.tableData.find(table => table.id === id)
+        },
+
+        // 根据ID获取表格索引
+        findTableIndexById(id: string): number {
+            return this.tableData.findIndex(table => table.id === id)
+        },
+
+        // 根据ID删除表格
+        deleteTableById(id: string) {
+            const index = this.findTableIndexById(id)
+            if (index !== -1) {
+                this.tableData.splice(index, 1)
+            }
+        },
+
+        // 根据ID更新表格名称
+        changeTableNameById(id: string, name: string) {
+            const table = this.findTableById(id)
+            if (table) {
+                table.name = name
+            }
+        },
+
+        // 根据ID更新表格状态
+        changeTableValidById(id: string, valid: boolean) {
+            const table = this.findTableById(id)
+            if (table) {
+                table.valid = valid
+            }
         },
     }
 })

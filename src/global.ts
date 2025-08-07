@@ -1,68 +1,125 @@
-const globalWebSocket = {
-    ws: null as WebSocket | null,
+import { reactive } from 'vue'
 
-    path: "ws://127.0.0.1:9091/",
+interface WebSocketState {
+    isConnected: boolean
+    isReconnecting: boolean
+    reconnectCount: number
+}
 
-    setWs(newWs: WebSocket) {
-        this.ws = newWs
-    },
+class GlobalWebSocket {
+    private _ws: WebSocket | null = null
+    private readonly path = "ws://127.0.0.1:9091/"
+    private readonly maxReconnectAttempts = 5
+    private reconnectTimer: NodeJS.Timeout | null = null
 
-    open() {
-        if (this.ws) {
-            this.ws.onopen && this.ws.onopen(new Event('open'))
-        }
-    },
+    public state = reactive<WebSocketState>({
+        isConnected: false,
+        isReconnecting: false,
+        reconnectCount: 0
+    })
 
-    close() {
-        if (this.ws) {
-            this.ws.close()
-        }
-    },
+    get instance(): WebSocket | null {
+        return this._ws
+    }
 
-    send(message: string) {
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            this.ws.send(message)
-        } else {
-            console.warn("WebSocket 未连接，无法发送消息")
-        }
-    },
+    get ws(): WebSocket | null {
+        return this._ws
+    }
 
-    // 初始化全局 WebSocket 连接
-    initGlobalWebSocket() {
-        try {
-            // 创建 WebSocket 连接
+    get isConnected(): boolean {
+        return this._ws?.readyState === WebSocket.OPEN
+    }
+
+    private connect(): Promise<WebSocket> {
+        return new Promise((resolve, reject) => {
             const socket = new WebSocket(this.path)
 
-            // 设置连接成功的回调
             socket.onopen = () => {
                 console.log("全局 WebSocket 连接成功")
+                this.state.isConnected = true
+                this.state.isReconnecting = false
+                this.state.reconnectCount = 0
+                resolve(socket)
             }
 
-            // 设置连接错误的回调
-            socket.onerror = () => {
-                console.log("全局 WebSocket 连接错误")
-                // 连接失败后尝试重连
-                setTimeout(() => {
-                    console.log("尝试重新连接 WebSocket...")
-                    this.initGlobalWebSocket()
-                }, 10000)
+            socket.onerror = (error) => {
+                console.error("WebSocket 连接错误:", error)
+                this.state.isConnected = false
+                reject(error)
             }
 
-            // 设置连接关闭的回调
             socket.onclose = () => {
                 console.log("全局 WebSocket 连接已关闭")
-                setTimeout(() => {
-                    console.log("尝试重新连接 WebSocket...")
-                    this.initGlobalWebSocket()
-                }, 10000)
+                this.state.isConnected = false
+                this.scheduleReconnect()
             }
+        })
+    }
 
-            // 将 WebSocket 实例保存到全局对象中
-            this.setWs(socket)
+    private scheduleReconnect(): void {
+        if (this.state.reconnectCount >= this.maxReconnectAttempts) {
+            console.error("WebSocket 重连次数超过限制，停止重连")
+            return
+        }
+
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer)
+        }
+
+        this.state.isReconnecting = true
+        this.reconnectTimer = setTimeout(() => {
+            this.state.reconnectCount++
+            console.log(`尝试重新连接 WebSocket... (${this.state.reconnectCount}/${this.maxReconnectAttempts})`)
+            this.initGlobalWebSocket()
+        }, Math.min(1000 * Math.pow(2, this.state.reconnectCount), 30000))
+    }
+
+    public async initGlobalWebSocket(): Promise<void> {
+        if (this._ws?.readyState === WebSocket.CONNECTING) {
+            return
+        }
+
+        this.close()
+
+        try {
+            this._ws = await this.connect()
         } catch (error) {
             console.error("WebSocket 初始化失败:", error)
+            this.scheduleReconnect()
+        }
+    }
+
+    public send(message: string): boolean {
+        if (this.isConnected && this._ws) {
+            this._ws.send(message)
+            return true
+        } else {
+            console.warn("WebSocket 未连接，无法发送消息")
+            return false
+        }
+    }
+
+    public close(): void {
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer)
+            this.reconnectTimer = null
+        }
+
+        if (this._ws) {
+            this._ws.close()
+            this._ws = null
+        }
+        this.state.isConnected = false
+        this.state.isReconnecting = false
+    }
+
+    public setMessageHandler(handler: (event: MessageEvent) => void): void {
+        if (this._ws) {
+            this._ws.onmessage = handler
         }
     }
 }
+
+const globalWebSocket = new GlobalWebSocket()
 
 export default globalWebSocket

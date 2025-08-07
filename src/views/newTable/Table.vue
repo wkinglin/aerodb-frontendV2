@@ -1,22 +1,33 @@
 <template>
-  <div>
-    <el-card class="box-card">
+  <div class="table-container">
+    <el-card class="table-card">
       <template #header>
-        <div class="clearfix">
-          <el-button class="newbutton" type="primary" @click="addNewRow"
-            style="float: left;margin-top:4px">添加新行</el-button>
-          <el-button class="newbutton" type="primary" @click="removeRow"
-            style="float: left;margin-top:4px">删除行</el-button>
-          <el-button class="newbutton" type="primary" @click="addNewCol"
-            style="float: left;margin-top:4px">添加新列</el-button>
-          <el-button class="newbutton" type="primary" @click="removeCol"
-            style="float: left;margin-top:4px">删除列</el-button>
-          <el-button class="newbutton" type="primary" @click="save" style="float: left;margin-top:4px">保存</el-button>
-          <el-button class="newbutton" type="primary" @click="changeColHeaders"
-            style="float: left;margin-top:4px">修改表头</el-button>
+        <div class="table-header">
+          <div class="header-title">
+            <el-icon class="title-icon">
+              <Grid />
+            </el-icon>
+            <span class="title-text">数据表编辑器</span>
+          </div>
+          <div class="header-actions">
+            <el-button-group>
+              <el-button type="primary" @click="addNewRow" :icon="Plus">添加行</el-button>
+              <el-button type="primary" @click="removeRow" :icon="Minus">删除行</el-button>
+            </el-button-group>
+            <el-button-group>
+              <el-button type="primary" @click="addNewCol" :icon="Plus">添加列</el-button>
+              <el-button type="primary" @click="removeCol" :icon="Minus">删除列</el-button>
+            </el-button-group>
+            <el-button-group>
+              <el-button type="primary" @click="changeColHeaders" :icon="Edit">修改表头</el-button>
+              <el-button type="success" @click="save" :icon="Check">保存</el-button>
+            </el-button-group>
+          </div>
         </div>
       </template>
-      <HotTable class="personTable" ref="hotRef" :settings="hotSettings" :data="hotData"></HotTable>
+      <div class="table-wrapper">
+        <HotTable class="data-table" ref="hotRef" :settings="hotSettings" :data="hotData" />
+      </div>
     </el-card>
 
     <el-dialog title="表格" v-model="dialogVisible" width="50%">
@@ -43,8 +54,8 @@
         </el-form-item>
       </el-form>
       <span class="dialog-footer">
-        <el-button @click="resetForm('formRef')">重置</el-button>
-        <el-button type="primary" @click="onSubmit('formRef')">确定</el-button>
+        <el-button @click="resetForm">重置</el-button>
+        <el-button type="primary" @click="onSubmit">确定</el-button>
       </span>
     </el-dialog>
 
@@ -91,7 +102,14 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import {
+  Plus,
+  Minus,
+  Edit,
+  Check,
+  Grid
+} from '@element-plus/icons-vue'
 import { useMainStore } from '@/store'
 import globalWebSocket from '@/global'
 import { useRoute } from 'vue-router'
@@ -127,10 +145,7 @@ const form = reactive({
 })
 
 const row = ref(0)
-const tableData = reactive({
-  name: '',
-  header: [] as any[],
-})
+// tableData 移除，直接在save函数中构造
 
 const ccN = reactive({
   name: "",
@@ -138,7 +153,7 @@ const ccN = reactive({
   newname: [] as string[],
 })
 
-const SourceData = ref([] as any[])
+// SourceData 移除，直接使用hotInstance.getSourceData()
 const hotData = ref([] as any[])
 const hotDataId = ref([] as any[])
 const newName = ref("")
@@ -147,20 +162,26 @@ const newType = ref(0)
 const hotSettings = reactive({
   licenseKey: 'non-commercial-and-evaluation',
   rowHeaders: true,
-  colHeaders: true,
-  columnHeaderHeight: 30,
-  rowHeights: 50,
-  // colWidths: 100,
-  // stretchH: 'all',
-  // width: "100%",
-  height: "auto",
+  // colHeaders: true,
+  columnHeaderHeight: 40,
+  rowHeights: 40,
+  colWidths: 120,
+  stretchH: 'all', // 自动填满宽度
+  width: '100%',
+  height: 'auto',
   contextMenu: true,
-  mergeCells: true,
+  mergeCells: false,
   allowInsertColumn: true,
-  allowremoveColumn: true,
-  cells: function (row: number, col: number, prop: string) {
-    const cellProperties: any = { readOnly: false, className: '' }
-    cellProperties.className = "cellStyle"
+  allowRemoveColumn: true,
+  manualColumnResize: true,
+  manualRowResize: true,
+  wordWrap: true,
+  cells: function (row: number, col: number) {
+    const cellProperties: any = {
+      readOnly: false,
+      className: 'custom-cell',
+      renderer: 'text'
+    }
     return cellProperties
   },
 })
@@ -202,27 +223,55 @@ onMounted(() => {
   init()
 })
 
+// 响应式的当前表格ID
+const currentTableId = ref<string>('')
+
+// 安全获取当前表格数据的辅助函数
+const getCurrentTable = () => {
+  if (!currentTableId.value) {
+    return null
+  }
+  return store.findTableById(currentTableId.value)
+}
+
 const init = () => {
-  //获得数据库行号
-  row.value = parseInt(route.query.table_id as string)
-  dialogVisible.value = store.tableData[row.value - 1].valid
+  // 从路由获取表格ID
+  const tableId = route.query.table_id as string
+  if (!tableId) {
+    ElMessage.error('表格ID不能为空')
+    return
+  }
+
+  currentTableId.value = tableId
+
+  // 获取当前表格数据
+  const currentTable = getCurrentTable()
+  if (!currentTable) {
+    ElMessage.error('找不到指定的数据库')
+    return
+  }
+
+  // 为兼容保留row.value，但不再用于数组索引
+  row.value = store.findTableIndexById(tableId) + 1
+
+  dialogVisible.value = currentTable.valid || false
 
   //初始化WebSocket
   initWebSocket()
 
   //获取表格数据
   send("getUserTable")
-  send(store.tableData[row.value - 1].name)
+  send(currentTable.name)
 
   //重新渲染表格
   if (!dialogVisible.value) {
     setTimeout(() => {
       renderTable()
-    }, 0.01)
+    }, 10)
   }
 
   //添加数据
-  form.colHeadersData = store.tableData[row.value - 1].headers
+  form.colHeadersData = currentTable.headers || []
 }
 
 const initWebSocket = () => {
@@ -290,82 +339,114 @@ const getMessage = (msg: any) => {
   }
 }
 
-const addRows = () => {
-  // 这里需要根据实际的HotTable组件来调整
-  // var row = hotRef.value?.hotInstance.countVisibleRows()
-  // if (row == 1) {
-  //   hotRef.value?.hotInstance.alter('insert_row')
-  // }
-}
-
-const addCols = () => {
-  // 这里需要根据实际的HotTable组件来调整
-  // var col = hotRef.value?.hotInstance.countVisibleCols()
-  // if (col == 1) {
-  //   hotRef.value?.hotInstance.alter('insert_col')
-  // }
-}
 
 //添加行数
 const addNewRow = () => {
-  store.tableData[row.value - 1].rownum++
-  // hotRef.value?.hotInstance.alter('insert_row')
-  // hotRef.value?.hotInstance.render()
+  const currentTable = getCurrentTable()
+  if (!currentTable) {
+    ElMessage.error('表格数据不存在')
+    return
+  }
+
+  if (hotRef.value && hotRef.value.hotInstance) {
+    const currentRows = hotRef.value.hotInstance.countRows()
+    hotRef.value.hotInstance.alter('insert_row_below', currentRows)
+    currentTable.rownum++
+    ElMessage.success('已添加新行')
+  }
 }
 
 //删除行数
 const removeRow = () => {
-  // var rownum = hotRef.value?.hotInstance.countVisibleRows()
-  store.tableData[row.value - 1].rownum--
-  // hotRef.value?.hotInstance.alter('remove_row')
-  // hotRef.value?.hotInstance.render()
+  if (hotRef.value && hotRef.value.hotInstance) {
+    const currentRows = hotRef.value.hotInstance.countRows()
+    if (currentRows <= 1) {
+      ElMessage.warning('至少需要保留一行')
+      return
+    }
+
+    ElMessageBox.confirm('确定要删除最后一行吗？', '确认删除', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning',
+    }).then(() => {
+      hotRef.value.hotInstance.alter('remove_row', currentRows - 1)
+      const currentTable = getCurrentTable()
+      if (currentTable) {
+        currentTable.rownum--
+      }
+      ElMessage.success('已删除行')
+    }).catch(() => {
+      // 取消删除
+    })
+  }
 }
 
 const addNewCol = () => {
-  // var colnum = hotRef.value?.hotInstance.countVisibleCols()
-  // hotRef.value?.hotInstance.alter('insert_col', colnum)
-  // hotRef.value?.hotInstance.render()
   dialogVisible3.value = true
 }
 
 const removeCol = () => {
-  // var colnum = hotRef.value?.hotInstance.countVisibleCols()
-  console.log(store.tableData[row.value - 1].headers)
-
-  //传送数据
-  send("delColumn")
-  var delCol = {
-    name: store.tableData[row.value - 1].name,
-    column: store.tableData[row.value - 1].headers[0] // 这里需要根据实际列数调整
+  const currentTable = getCurrentTable()
+  if (!currentTable) {
+    ElMessage.error('表格数据不存在')
+    return
   }
-  send(JSON.stringify(delCol))
 
-  //修改表格
-  // hotRef.value?.hotInstance.alter('remove_col')
-  // hotRef.value?.hotInstance.render()
+  if (hotRef.value && hotRef.value.hotInstance) {
+    const currentCols = hotRef.value.hotInstance.countCols()
+    if (currentCols <= 1) {
+      ElMessage.warning('至少需要保留一列')
+      return
+    }
 
-  //减一行
-  // if (colnum != 1) {
-  //   store.tableData[row.value - 1].colnum--
-  //   store.deleteTableHeader({
-  //     i: row.value - 1,
-  //   })
-  // }
+    const headers = currentTable.headers || []
+    if (headers.length === 0) {
+      ElMessage.error('表头信息不存在')
+      return
+    }
 
-  console.log(store.tableData[row.value - 1].headers)
+    const lastColumnName = headers[headers.length - 1]
+
+    ElMessageBox.confirm(`确定要删除列 "${lastColumnName}" 吗？`, '确认删除', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning',
+    }).then(() => {
+      // 发送删除列的消息
+      send("delColumn")
+      const delCol = {
+        name: currentTable.name,
+        column: lastColumnName
+      }
+      send(JSON.stringify(delCol))
+
+      // 修改表格
+      hotRef.value.hotInstance.alter('remove_col', currentCols - 1)
+
+      // 更新store
+      const tableIndex = store.findTableIndexById(currentTableId.value)
+      if (tableIndex !== -1) {
+        store.deleteTableHeader({
+          i: tableIndex,
+        })
+      }
+
+      ElMessage.success('已删除列')
+    }).catch(() => {
+      // 取消删除
+    })
+  }
 }
 
 //提交表单1
-const onSubmit = (formName: string) => {
+const onSubmit = () => {
   formRef.value?.validate((valid: boolean) => {
     if (valid) {
       changeColAndRow(parseInt(form.columnNumbers), parseInt(form.rowNumbers))
 
       //记录数据
-      store.changeTableName({
-        i: row.value - 1,
-        name: form.name,
-      })
+      store.changeTableNameById(currentTableId.value, form.name)
       getColHeaders()
       dialogVisible.value = false
       // renderPage = true
@@ -378,64 +459,69 @@ const onSubmit = (formName: string) => {
 }
 
 const save = () => {
-  // 获取表格数据
-  if (hotRef.value && hotRef.value.hotInstance) {
-    const colnum = hotRef.value.hotInstance.countVisibleCols()
-    const rownum = hotRef.value.hotInstance.countVisibleRows()
-    const array = hotRef.value.hotInstance.getSourceDataArray(0, 0, rownum - 1, colnum - 1)
-
-    SourceData.value = []
-    for (var i = 0; i < rownum; i++) {
-      SourceData.value.push([])
-      for (var j = 0; j < colnum; j++) {
-        SourceData.value[i].push(array[i][j])
-      }
+  try {
+    if (!hotRef.value || !hotRef.value.hotInstance) {
+      ElMessage.error('表格未初始化')
+      return
     }
-  }
 
-  // 传递表头数据
-  if (store.tableData[row.value - 1].valid == true) {
-    tableData.name = store.tableData[row.value - 1].name
-    if (hotRef.value && hotRef.value.hotInstance) {
-      const colnum = hotRef.value.hotInstance.countVisibleCols()
-      for (var i = 0; i < colnum; i++) {
-        console.log(store.tableData[row.value - 1].headers[i])
-        tableData.header.push({
-          key: store.tableData[row.value - 1].headers[i],
-          type: form.colHeadersType[i],
-        })
-      }
+    const hotInstance = hotRef.value.hotInstance
+    const colnum = hotInstance.countCols()
+    const rownum = hotInstance.countRows()
+
+    // 验证表格数据
+    if (colnum === 0 || rownum === 0) {
+      ElMessage.error('表格不能为空')
+      return
     }
-    let temp = JSON.stringify(tableData)
-    send("creatTable")
-    send(temp)
-  }
 
-  //传递表格数据
-  let data = {
-    name: store.tableData[row.value - 1].name,
-    data: SourceData.value,
-  }
-  let tmp = JSON.stringify(data)
-  send("insert")
-  send(tmp)
+    // 获取表格数据
+    const sourceData = hotInstance.getSourceData()
 
-  if (store.tableData[row.value - 1].valid == true) {
-    if (socket.value) {
+    // 获取当前表格数据
+    const currentTable = getCurrentTable()
+    if (!currentTable) {
+      ElMessage.error('表格数据不存在')
+      return
+    }
+
+    // 处理表头数据（如果是新创建的表）
+    if (currentTable.valid === true) {
+      const tableHeaderData = {
+        name: currentTable.name,
+        header: (currentTable.headers || []).map((headerName: string, index: number) => ({
+          key: headerName,
+          type: form.colHeadersType[index] || '2' // 默认为字符类型
+        }))
+      }
+
+      send("creatTable")
+      send(JSON.stringify(tableHeaderData))
+    }
+
+    // 发送表格数据
+    const tableData = {
+      name: currentTable.name,
+      data: sourceData
+    }
+
+    send("insert")
+    send(JSON.stringify(tableData))
+
+    // 更新表格状态
+    store.changeTableValidById(currentTableId.value, false)
+
+    // 设置消息处理
+    if (currentTable.valid === true && socket.value) {
       socket.value.onmessage = getMessage
+    } else {
+      ElMessage.success('保存成功')
     }
-  } else {
-    ElMessage({
-      message: '恭喜你，保存成功',
-      type: 'success'
-    })
-  }
 
-  //改变表格状态
-  store.changeTableValid({
-    i: row.value - 1,
-    valid: false,
-  })
+  } catch (error) {
+    console.error('保存失败:', error)
+    ElMessage.error('保存失败，请重试')
+  }
 }
 
 const getColHeaders = () => {
@@ -447,17 +533,21 @@ const getColHeaders = () => {
     console.log(rownum)
 
     //修改表格数据
-    for (var i = 0; i < form.colHeadersData.length; i++) {
-      store.changeTableData({
-        row: row.value,
-        i: i,
-        colnum: form.colHeadersData.length,
-        rownum: parseInt(form.rowNumbers),
-        element: form.colHeadersData[i]
-      })
+    const tableIndex = store.findTableIndexById(currentTableId.value)
+    if (tableIndex !== -1) {
+      for (var i = 0; i < form.colHeadersData.length; i++) {
+        store.changeTableData({
+          row: tableIndex + 1, // changeTableData期望从1开始的索引
+          i: i,
+          colnum: form.colHeadersData.length,
+          rownum: parseInt(form.rowNumbers),
+          element: form.colHeadersData[i]
+        })
+      }
     }
 
-    console.log(store.tableData[row.value - 1])
+    const currentTable = getCurrentTable()
+    console.log(currentTable)
     hotRef.value.hotInstance.updateSettings({
       colHeaders: makeColHeaders()
     })
@@ -471,10 +561,16 @@ const turnInt = (num: string | number) => {
 
 //修改表头按钮函数
 const changeColHeaders = () => {
-  ccN.oldname = JSON.parse(JSON.stringify(store.tableData[row.value - 1].headers))
+  const currentTable = getCurrentTable()
+  if (!currentTable) {
+    ElMessage.error('表格数据不存在')
+    return
+  }
+
+  ccN.oldname = JSON.parse(JSON.stringify(currentTable.headers || []))
   //重新赋值
-  form.colHeadersData = store.tableData[row.value - 1].headers
-  form.colHeadersType = store.tableData[row.value - 1].headersType
+  form.colHeadersData = currentTable.headers || []
+  form.colHeadersType = currentTable.headersType || []
 
   dialogVisible2.value = true
 }
@@ -486,8 +582,11 @@ const onSubmit2 = () => {
 
   //传送数据
   send("changeColumnName")
-  ccN.newname = store.tableData[row.value - 1].headers
-  ccN.name = store.tableData[row.value - 1].name
+  const currentTable = getCurrentTable()
+  if (currentTable) {
+    ccN.newname = currentTable.headers || []
+    ccN.name = currentTable.name
+  }
   send(JSON.stringify(ccN))
 
   //关闭dialog
@@ -496,19 +595,26 @@ const onSubmit2 = () => {
 
 //修改表头
 const makeColHeaders = () => {
-  return store.tableData[row.value - 1].headers
+  const currentTable = getCurrentTable()
+  return currentTable?.headers || []
 }
 
 //重新渲染
 const renderTable = () => {
-  console.log(store.tableData[row.value - 1].headers)
-  console.log(store.tableData[row.value - 1].headers.length)
-  console.log(store.tableData[row.value - 1].rownum)
+  const currentTable = getCurrentTable()
+  if (!currentTable) {
+    console.error('表格数据不存在')
+    return
+  }
+
+  console.log(currentTable.headers)
+  console.log(currentTable.headers?.length || 0)
+  console.log(currentTable.rownum)
 
   //重新渲染表格
   // hotRef.value?.hotInstance.updateSettings({
-  //   startCols: store.tableData[row.value - 1].headers.length,
-  //   startRows: store.tableData[row.value - 1].rownum,
+  //   startCols: currentTable.headers?.length || 0,
+  //   startRows: currentTable.rownum,
   //   colHeaders: makeColHeaders()
   // })
   if (IfUpdateData.value) {
@@ -541,80 +647,273 @@ const changeColAndRow = (colnum: number, rownum: number) => {
   }
 }
 
-const deleteRows = (index: number) => {
-  send("deleteUserLine")
-  var json = {
-    name: store.tableData[row.value - 1].name,
-    id: hotDataId.value[index],
-  }
-  var js = JSON.stringify(json)
-  send(js)
-}
 
 const onSubmit3 = () => {
-  // var colnum = hotRef.value?.hotInstance.countVisibleCols()
-  // var rownum = hotRef.value?.hotInstance.countVisibleRows()
-
-  store.changeTableData({
-    row: row.value,
-    i: 0, // 这里需要根据实际列数调整
-    colnum: 1,
-    rownum: parseInt(form.rowNumbers),
-    element: newName.value,
-  })
-  store.changeTableType({
-    row: row.value,
-    i: 0, // 这里需要根据实际列数调整
-    element: newType.value,
-  })
-
-  // hotRef.value?.hotInstance.updateSettings({
-  //   colHeaders: makeColHeaders()
-  // })
-  send("addColumn")
-  var newcol = {
-    name: store.tableData[row.value - 1].name,
-    column: newName.value,
-    type: newType.value,
+  const tableIndex = store.findTableIndexById(currentTableId.value)
+  if (tableIndex !== -1) {
+    store.changeTableData({
+      row: tableIndex + 1, // changeTableData期望从1开始的索引
+      i: 0, // 这里需要根据实际列数调整
+      colnum: 1,
+      rownum: parseInt(form.rowNumbers),
+      element: newName.value,
+    })
+    store.changeTableType({
+      row: tableIndex + 1, // changeTableType期望从1开始的索引
+      i: 0, // 这里需要根据实际列数调整
+      element: newType.value,
+    })
   }
-  send(JSON.stringify(newcol))
+
+  send("addColumn")
+  const currentTable = getCurrentTable()
+  if (currentTable) {
+    const newcol = {
+      name: currentTable.name,
+      column: newName.value,
+      type: newType.value,
+    }
+    send(JSON.stringify(newcol))
+    console.log(currentTable.headers)
+  }
   newName.value = ""
   newType.value = 0
   dialogVisible3.value = false
-  console.log(store.tableData[row.value - 1].headers)
 }
 
 //重置表单
-const resetForm = (formName: string) => {
+const resetForm = () => {
   formRef.value?.resetFields()
 }
 
-watch(() => route.query.table_id, () => {
-  init()
+watch(() => route.query.table_id, (newTableId) => {
+  if (newTableId && newTableId !== currentTableId.value) {
+    init()
+  }
 }, { immediate: true })
 
 </script>
 
+<style scoped>
+.table-container {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  padding: 20px;
+  font-family: "微软雅黑", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.table-card {
+  max-width: 100%;
+  margin: 0 auto;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(59, 130, 246, 0.15);
+  border: 1px solid #dbeafe;
+  overflow: hidden;
+}
+
+/* 头部样式 */
+.table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  padding: 16px 0;
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #1e40af;
+  font-weight: 600;
+  font-size: 18px;
+}
+
+.title-icon {
+  font-size: 24px;
+  color: #3b82f6;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.header-actions .el-button-group {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.header-actions .el-button {
+  border-radius: 0;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.header-actions .el-button-group .el-button:first-child {
+  border-radius: 8px 0 0 8px;
+}
+
+.header-actions .el-button-group .el-button:last-child {
+  border-radius: 0 8px 8px 0;
+}
+
+.header-actions .el-button:hover {
+  transform: translateY(-1px);
+}
+
+/* 表格容器样式 */
+.table-wrapper {
+  background: white;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Handsontable 自定义样式 */
+.data-table {
+  width: 100% !important;
+}
+
+/* 对话框样式 */
+.dialog-footer {
+  text-align: right;
+}
+
+.dialog-footer .el-button {
+  margin-left: 12px;
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .table-container {
+    padding: 12px;
+  }
+
+  .table-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+
+  .header-title {
+    justify-content: center;
+  }
+
+  .header-actions {
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .header-actions .el-button-group {
+    flex: 1;
+    min-width: 150px;
+  }
+
+  .table-wrapper {
+    padding: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .header-actions .el-button {
+    font-size: 12px;
+    padding: 8px 12px;
+  }
+
+  .title-text {
+    font-size: 16px;
+  }
+}
+</style>
+
+<!-- Handsontable 全局样式覆盖 -->
 <style>
-.box-card {
-  margin: 50px;
-}
-
-.personTable .handsontable table thead th {
-  font-size: 16px;
-  font-family: "微软雅黑";
-  color: #fff;
+/* Handsontable 表头样式 - 使用Element Plus淡蓝色主题 */
+.data-table .handsontable table thead th {
+  font-size: 14px;
+  font-family: "微软雅黑", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #ffffff !important;
   text-align: center;
   vertical-align: middle;
-  background: #3366cc;
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%) !important;
+  border: 1px solid #2563eb !important;
+  font-weight: 600;
+  height: 40px;
 }
 
-.personTable .handsontable table t {
-  font-size: 16px;
-  font-family: "微软雅黑";
-  color: #fff;
+/* Handsontable 行标题样式 */
+.data-table .handsontable table tbody th {
+  background: #f8fafc !important;
+  color: #64748b !important;
+  font-weight: 500;
+  border: 1px solid #e2e8f0 !important;
+}
+
+/* Handsontable 单元格样式 */
+.data-table .handsontable table tbody td {
+  background: #ffffff !important;
+  color: #374151 !important;
+  border: 1px solid #e5e7eb !important;
+  font-size: 13px;
+  padding: 8px !important;
+  line-height: 1.5;
+}
+
+.data-table .handsontable table tbody td:hover {
+  background: #f0f9ff !important;
+}
+
+.data-table .handsontable table tbody td.current {
+  background: #dbeafe !important;
+  border: 2px solid #3b82f6 !important;
+}
+
+/* Handsontable 选中区域样式 */
+.data-table .handsontable table tbody td.area {
+  background: #eff6ff !important;
+}
+
+/* Handsontable 容器样式 */
+.data-table .handsontable {
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* 自定义单元格类 */
+.data-table .custom-cell {
   text-align: center;
   vertical-align: middle;
-  background: #3366cc;
+}
+
+/* 滚动条样式 */
+.data-table .handsontable .wtHolder {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f1f5f9;
+}
+
+.data-table .handsontable .wtHolder::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.data-table .handsontable .wtHolder::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.data-table .handsontable .wtHolder::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.data-table .handsontable .wtHolder::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 </style>

@@ -67,7 +67,7 @@ export default {
     methods: {
        init() {
         // 实例化socket
-        this.socket=this.global.ws;
+        this.socket=this.globalWebSocket.ws;
         // 监听socket连接
         this.socket.onopen = this.open;
         // 监听socket错误信息

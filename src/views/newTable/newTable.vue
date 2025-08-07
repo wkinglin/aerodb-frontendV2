@@ -1,44 +1,82 @@
 <template>
-  <div>
+  <div class="new-table-container">
     <el-card class="box-card">
       <template #header>
-        <div class="clearfix">
-          <el-button type="primary" @click="creatTables()" style="float: left;margin-top:4px">新建数据库</el-button>
-          <!-- <el-button type="primary" @click="deleteTables()" style="float: left;margin-top:4px">删除数据库</el-button> -->
-          <el-button type="primary" plain @click="seeAll()" style="float:right;margin-top:4px">取消</el-button>
-          <el-button type="primary" @click="searchTables()" style="float:right;margin-top:4px">
-            <el-icon>
-              <Search />
-            </el-icon>
-            搜索
-          </el-button>
-          <el-input type="input" placeholder="请输入数据库名称" v-model="search"
-            style="width:auto;float:right;margin-left:1%;margin-right: 1%"></el-input>
-        </div>
-      </template>
-      <div v-for="(item, index) in tableData" :key="index" class="text">
-        <div class="item">
-          <div>{{ item.name }}</div>
-          <div>
-            <el-button type="primary" @click="watchTables(index)" style="margin-top:4px">查看数据库</el-button>
-            <el-button type="primary" @click="changeTablesName(index)" style="margin-top:4px">修改数据库名字</el-button>
-            <el-button type="primary" @click="deleteRows(index)" style="margin-top:4px">删除</el-button>
+        <div class="header-content">
+          <div class="header-left">
+            <el-button type="primary" @click="creatTables()" :icon="Plus" size="large">
+              新建数据库
+            </el-button>
+          </div>
+          <div class="header-right">
+            <div class="search-container">
+              <el-input v-model="search" placeholder="请输入数据库名称" class="search-input" clearable
+                @keyup.enter="searchTables">
+                <template #prefix>
+                  <el-icon>
+                    <Search />
+                  </el-icon>
+                </template>
+              </el-input>
+              <el-button type="primary" @click="searchTables()" :icon="Search">
+                搜索
+              </el-button>
+              <el-button type="info" plain @click="seeAll()" :icon="Refresh">
+                重置
+              </el-button>
+            </div>
           </div>
         </div>
-        <el-divider></el-divider>
+      </template>
+      <div class="table-list">
+        <div v-if="tableData.length === 0" class="empty-state">
+          <el-empty description="暂无数据库">
+            <el-button type="primary" @click="creatTables()" :icon="Plus">
+              创建第一个数据库
+            </el-button>
+          </el-empty>
+        </div>
+        <div v-else>
+          <div v-for="(item, index) in tableData" :key="`table-${index}`" class="table-item">
+            <div class="table-info">
+              <div class="table-name">
+                <el-icon class="table-icon">
+                  <List />
+                </el-icon>
+                {{ item.name }}
+              </div>
+              <div class="table-meta">
+                创建时间: {{ formatDate(new Date()) }}
+              </div>
+            </div>
+            <div class="table-actions">
+              <el-button type="primary" @click="watchTables(index)" :icon="View">
+                查看
+              </el-button>
+              <el-button type="warning" @click="changeTablesName(index)" :icon="Edit">
+                重命名
+              </el-button>
+              <el-button type="danger" @click="deleteRows(index)" :icon="Delete">
+                删除
+              </el-button>
+            </div>
+          </div>
+        </div>
       </div>
     </el-card>
 
-    <el-dialog title="改名" v-model="dialogVisible" width="50%" :before-close="handleClose">
-      <el-form>
-        <el-form-item prop="name" :rules="rule">
-          <el-input v-model="name" placeholder="请输入名称"></el-input>
+    <el-dialog title="重命名数据库" v-model="dialogVisible" width="400px" :before-close="handleClose" center>
+      <el-form ref="formRef" :model="formData" :rules="rules" label-width="80px">
+        <el-form-item label="数据库名" prop="name">
+          <el-input v-model="formData.name" placeholder="请输入新的数据库名称" clearable maxlength="50" show-word-limit />
         </el-form-item>
       </el-form>
-      <span>
-        <el-button @click="dialogVisible = false">取 消</el-button>
-        <el-button type="primary" @click="onSubmitName()">确 定</el-button>
-      </span>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="dialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="onSubmitName()">确定</el-button>
+        </div>
+      </template>
     </el-dialog>
 
   </div>
@@ -48,6 +86,15 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import {
+  Plus,
+  Search,
+  Refresh,
+  List,
+  View,
+  Edit,
+  Delete
+} from '@element-plus/icons-vue'
 import globalWebSocket from '@/global'
 import { useMainStore } from '@/store'
 
@@ -55,13 +102,22 @@ import { useMainStore } from '@/store'
 const tablenumbers = ref(0)
 const search = ref('')
 const dialogVisible = ref(false)
-const name = ref('')
 const index = ref(0)
 const tableData = ref([] as any[])
+const formRef = ref()
+
+// 表单数据
+const formData = reactive({
+  name: ''
+})
 
 // 表单验证规则
-const rule = reactive({
-  name: [{ required: true, message: '名称不能为空' }]
+const rules = reactive({
+  name: [
+    { required: true, message: '数据库名称不能为空', trigger: 'blur' },
+    { min: 1, max: 50, message: '长度在 1 到 50 个字符', trigger: 'blur' },
+    { pattern: /^[a-zA-Z0-9_\u4e00-\u9fa5]+$/, message: '只能包含字母、数字、下划线和中文', trigger: 'blur' }
+  ]
 })
 
 // 获取路由和store实例
@@ -95,36 +151,42 @@ const init = () => {
 
 //接收数据
 const getMessage = (msg: any) => {
-  var arr = []
-  arr = eval(msg.data)
-  var l = arr.length
+  try {
+    // 安全解析JSON数据，避免使用eval
+    const data = JSON.parse(msg.data)
+    const arr = Array.isArray(data) ? data : []
+    const l = arr.length
 
-  for (var i = 0; i < l; i++) {
-    var f = 1
-    if (store.tableData.length > 1) {
-      for (var j = 0; j < store.tableData.length; j++) {
-        if (store.tableData[j].name == arr[i]) {
-          f = 0
-        }
+    for (let i = 0; i < l; i++) {
+      let exists = false
+
+      // 检查是否已存在相同名称的数据库
+      if (store.tableData.length > 0) {
+        exists = store.tableData.some(table => table.name === arr[i])
       }
-    }
-    if (f == 0) continue
-    //增加数据库
-    store.increment()
-    //修改数据库名字
-    store.changeTableName({
-      i: i,
-      name: arr[i],
-    })
-    //取消显示设置表单
-    store.changeTableValid({
-      i: i,
-      valid: false,
-    })
-  }
-  store.newTableValible = false
 
-  tableData.value = store.tableData
+      if (exists) continue
+
+      //增加数据库
+      store.increment()
+      //修改数据库名字
+      store.changeTableName({
+        i: store.tableData.length - 1, // 使用正确的索引
+        name: arr[i],
+      })
+      //取消显示设置表单
+      store.changeTableValid({
+        i: store.tableData.length - 1,
+        valid: false,
+      })
+    }
+    store.newTableValible = false
+
+    tableData.value = store.tableData
+  } catch (error) {
+    console.error('解析WebSocket消息失败:', error)
+    ElMessage.error('数据解析失败')
+  }
 }
 
 const creatTables = () => {
@@ -132,46 +194,79 @@ const creatTables = () => {
   store.increment()
 }
 
-const deleteTables = () => {
-  tablenumbers.value--
-  store.decrement()
-}
 
-const watchTables = (row: number) => {
-  router.push({
-    path: `table`,
-    query: {
-      table_id: row + 1
-    }
-  })
+const watchTables = (index: number) => {
+  const table = tableData.value[index]
+  if (table) {
+    router.push({
+      path: `table`,
+      query: {
+        table_id: table.id,
+        table_name: table.name // 额外传递名称用于显示
+      }
+    })
+  } else {
+    ElMessage.error('表格不存在')
+  }
 }
 
 const changeTablesName = (idx: number) => {
+  const table = tableData.value[idx]
+  if (!table) {
+    ElMessage.error('表格不存在')
+    return
+  }
+  
   dialogVisible.value = true
   index.value = idx
+  formData.name = table.name
 }
 
 const onSubmitName = () => {
-  send("changeTableName")
-  var s = {
-    oldname: store.tableData[index.value].name,
-    newname: name.value,
-  }
-  send(JSON.stringify(s))
-  store.changeTableName({
-    i: index.value,
-    name: name.value,
+  if (!formRef.value) return
+
+  formRef.value.validate((valid: boolean) => {
+    if (valid) {
+      // 检查名称是否已存在
+      const exists = store.tableData.some((table, idx) =>
+        table.name === formData.name && idx !== index.value
+      )
+
+      if (exists) {
+        ElMessage.error('数据库名称已存在')
+        return
+      }
+
+      const currentTable = tableData.value[index.value]
+      if (!currentTable) {
+        ElMessage.error('表格不存在')
+        return
+      }
+
+      send("changeTableName")
+      const payload = {
+        oldname: currentTable.name,
+        newname: formData.name,
+      }
+      send(JSON.stringify(payload))
+      store.changeTableNameById(currentTable.id, formData.name)
+
+      ElMessage.success('重命名成功')
+      dialogVisible.value = false
+      formData.name = ''
+    }
   })
-  dialogVisible.value = false
 }
 
 const searchTables = () => {
-  tableData.value = []
-  for (var i = 0; i < store.tableData.length; i++) {
-    if (store.tableData[i].name.startsWith(search.value)) {
-      tableData.value.push(store.tableData[i])
-    }
+  if (!search.value.trim()) {
+    tableData.value = store.tableData
+    return
   }
+
+  tableData.value = store.tableData.filter(table =>
+    table.name.toLowerCase().includes(search.value.toLowerCase())
+  )
 }
 
 const handleClose = (done: any) => {
@@ -185,65 +280,243 @@ const seeAll = () => {
   search.value = ""
 }
 
+// 格式化日期
+const formatDate = (date: Date) => {
+  return date.toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  })
+}
+
 const deleteRows = (idx: number) => {
+  const table = tableData.value[idx]
+  if (!table) {
+    ElMessage.error('表格不存在')
+    return
+  }
+
   //向后端传递删除信息
-  var UserTable = {
-    name: store.tableData[idx].name,
+  const UserTable = {
+    name: table.name,
   }
   send("deleteUserTable")
   send(JSON.stringify(UserTable))
 
   //执行删除操作
-  store.deleteTableData({
-    i: idx,
-  })
-  ElMessage({
-    message: '删除成功',
-    type: 'success'
-  })
+  store.deleteTableById(table.id)
+  ElMessage.success('删除成功')
 }
 </script>
 
-<style>
-.text {
-  font-size: 16px;
-  font-family: "微软雅黑";
-}
-
-.textarea {
-  text-align: left;
-  padding-left: 10px;
-  padding-right: 45%;
-  width: 20%;
-  display: inline-block;
-}
-
-.button {
-  /* display:inline-block; */
-  float: right;
-}
-
-.el-divider--horizontal {
-  margin: 10px 0;
-}
-
-.item {
-  margin-bottom: 1px;
-  display: flex;
-  justify-content: space-between;
-}
-
-.clearfix:before,
-.clearfix:after {
-  display: table;
-  content: "";
-}
-
-.clearfix:after {
-  clear: both
+<style scoped>
+.new-table-container {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  padding: 20px;
+  font-family: "微软雅黑", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 .box-card {
-  margin: 50px;
+  max-width: 1200px;
+  margin: 0 auto;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  border: none;
+  overflow: hidden;
+}
+
+/* 头部样式 */
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  padding: 8px 0;
+}
+
+.header-left {
+  flex-shrink: 0;
+}
+
+.header-right {
+  flex: 1;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.search-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.search-input {
+  width: 280px;
+}
+
+/* 表格列表样式 */
+.table-list {
+  min-height: 400px;
+}
+
+.empty-state {
+  padding: 60px 20px;
+}
+
+.table-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  margin-bottom: 16px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border: 1px solid #f0f0f0;
+  transition: all 0.3s ease;
+}
+
+.table-item:hover {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
+  border-color: #409eff;
+}
+
+.table-item:last-child {
+  margin-bottom: 0;
+}
+
+.table-info {
+  flex: 1;
+}
+
+.table-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.table-icon {
+  color: #409eff;
+  font-size: 20px;
+}
+
+.table-meta {
+  font-size: 14px;
+  color: #909399;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.table-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.table-actions .el-button {
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.table-actions .el-button:hover {
+  transform: translateY(-1px);
+}
+
+/* 对话框样式 */
+.dialog-footer {
+  text-align: right;
+}
+
+.dialog-footer .el-button {
+  margin-left: 12px;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-weight: 500;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .new-table-container {
+    padding: 10px;
+  }
+
+  .header-content {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+
+  .header-left,
+  .header-right {
+    justify-content: center;
+  }
+
+  .search-container {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .search-input {
+    width: 100%;
+    min-width: 200px;
+  }
+
+  .table-item {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+    padding: 16px;
+  }
+
+  .table-actions {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .table-actions .el-button {
+    flex: 1;
+    min-width: 80px;
+  }
+}
+
+@media (max-width: 480px) {
+  .table-actions {
+    gap: 4px;
+  }
+
+  .table-actions .el-button {
+    font-size: 12px;
+    padding: 8px 12px;
+  }
+
+  .search-container {
+    gap: 8px;
+  }
+}
+
+/* 动画效果 */
+.table-item {
+  animation: fadeInUp 0.3s ease forwards;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style>
