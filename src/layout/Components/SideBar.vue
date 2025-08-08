@@ -3,12 +3,17 @@
     <el-aside width="auto">
       <el-menu :collapse="isCollapse" default-active="$route.path" router class="el-menu-vertical-demo"
         background-color="#FFFFFF">
-        <el-menu-item style="margin-top:10px">
-          <el-avatar class="imgLogo">
-            <img src="@/assets/icon.png" alt="logo" />
-          </el-avatar>
-          <span v-if="!isCollapse" class="app-title">可靠性评估软件</span>
-        </el-menu-item>
+        <div class="logo-container" :class="{ 'collapsed': isCollapse }">
+          <div class="logo-wrapper">
+            <el-avatar :size="40" class="logo-avatar">
+              <img src="@/assets/icon.png" alt="logo" />
+            </el-avatar>
+            <div v-if="!isCollapse" class="app-info">
+              <h3 class="app-title">可靠性评估</h3>
+              <p class="app-subtitle">智能分析系统</p>
+            </div>
+          </div>
+        </div>
         <el-menu-item index="/dashboard">
           <el-icon>
             <House />
@@ -98,99 +103,285 @@ watch(() => props.isCollapsed, (newVal) => {
 </script>
 
 <style>
-.logoLink {
-  color: white !important;
-  font-size: 15px;
-  margin-left: 18px;
-  display: inline-block;
-  font-weight: bold;
-  height: 100%;
-  line-height: 50px;
-}
-
-.imgLogo {
-  height: 45px;
-  vertical-align: middle;
-  float: left;
-  margin-right: 5px;
+/* Logo 容器样式 */
+.logo-container {
+  padding: 20px 16px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
-  margin-top: 5px;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
 }
 
+.logo-container::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 16px;
+  right: 16px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgba(102, 126, 234, 0.3) 50%, transparent 100%);
+}
+
+.logo-container.collapsed {
+  padding: 20px 12px;
+}
+
+.logo-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo-avatar {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.logo-avatar:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.logo-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.app-info {
+  flex: 1;
+  text-align: left;
+  animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.app-title {
+  color: #2c3e50;
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0;
+  margin-bottom: 2px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1.2;
+}
+
+.app-subtitle {
+  color: #8492a6;
+  font-size: 12px;
+  margin: 0;
+  font-weight: 400;
+  letter-spacing: 0.5px;
+}
+
+/* 菜单样式 */
 .el-menu {
   height: 100%;
-  overflow: hidden;
-  /* 防止菜单内容溢出 */
+  overflow-y: auto;
+  overflow-x: hidden;
+  border-right: none;
+  background: transparent !important;
+  padding: 8px 0;
+}
+
+.el-menu::-webkit-scrollbar {
+  width: 4px;
+}
+
+.el-menu::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.el-menu::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 2px;
 }
 
 .el-menu-item {
-  font-size: 15px !important;
-  height: 75px !important;
-  /* 修复高度单位 */
-  font-family: 微软雅黑 !important;
+  font-size: 14px !important;
+  height: 56px !important;
+  line-height: 56px !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  margin: 4px 12px;
+  border-radius: 12px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  background: transparent;
+  border: none;
+  color: #5a6c7d;
+  font-weight: 500;
 }
 
-.el-menu-vertical-demo {
-  height: 100%;
-  vertical-align: middle;
-  border-right: none;
-  /* 移除右侧边框 */
+.el-menu-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  border-radius: 12px;
 }
 
-.el-container {
-  height: 100%;
+.el-menu-item:hover::before {
+  opacity: 1;
 }
 
-.el-aside {
-  /* background-color: #D3DCE6; */
+.el-menu-item:hover {
+  background: transparent !important;
+  color: #667eea;
+  transform: translateX(4px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+}
+
+.el-menu-item.is-active {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.12) 0%, rgba(118, 75, 162, 0.12) 100%) !important;
+  color: #667eea !important;
+  font-weight: 600;
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.2);
+  border: 1px solid rgba(102, 126, 234, 0.2);
+}
+
+.el-menu-item.is-active::after {
+  content: '';
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 2px;
+}
+
+.el-menu-item .el-icon {
+  margin-right: 12px;
+  font-size: 18px;
+  transition: all 0.3s ease;
+}
+
+.el-menu-item:hover .el-icon {
+  transform: scale(1.1);
+}
+
+.el-menu-item.is-active .el-icon {
+  color: #667eea;
+  transform: scale(1.1);
+}
+
+/* 折叠状态下的样式 */
+.el-menu--collapse .el-menu-item {
+  margin: 4px 8px;
   text-align: center;
-  line-height: 200px;
+  justify-content: center;
+}
+
+.el-menu--collapse .el-menu-item .el-icon {
+  margin-right: 0;
+  font-size: 20px;
+}
+
+/* 容器样式 */
+.el-aside {
+  text-align: left;
   height: 100%;
   overflow: hidden;
-  /* 隐藏滚动条 */
+  position: relative;
+}
+
+.el-aside::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.9) 100%);
+  backdrop-filter: blur(10px);
+  z-index: -1;
 }
 
 /* 隐藏滚动条但保留滚动功能 */
 div::-webkit-scrollbar {
-  display: none;
-  /* Chrome, Safari, Opera */
-  width: 0;
+  width: 4px;
 }
 
-div {
-  -ms-overflow-style: none;
-  /* IE and Edge */
-  scrollbar-width: none;
-  /* Firefox */
+div::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-/* 侧边栏包装器 */
-.sidebar-wrapper {
-  height: 100%;
-  overflow: hidden;
+div::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.3) 0%, rgba(118, 75, 162, 0.3) 100%);
+  border-radius: 2px;
 }
 
-/* 侧边栏容器 */
-.sidebar-aside {
-  transition: width 0.3s;
-  overflow: hidden;
+div::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.5) 0%, rgba(118, 75, 162, 0.5) 100%);
 }
 
-/* Logo 容器样式 */
-.logo-container {
-  height: 60px;
-  display: flex;
-  align-items: center;
-  padding: 0 16px;
-  overflow: hidden;
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .logo-container {
+    padding: 16px 12px;
+  }
+  
+  .el-menu-item {
+    height: 48px !important;
+    line-height: 48px !important;
+    font-size: 13px !important;
+    margin: 2px 8px;
+    border-radius: 10px;
+  }
+  
+  .app-title {
+    font-size: 14px;
+  }
+  
+  .app-subtitle {
+    font-size: 11px;
+  }
 }
 
-/* 应用标题 */
-.app-title {
-  color: #000;
-  font-size: 16px;
-  font-weight: 600;
-  margin-left: 10px;
-  white-space: nowrap;
+/* 动画效果 */
+.el-menu-item {
+  animation: fadeInLeft 0.3s ease;
+  animation-fill-mode: both;
+}
+
+.el-menu-item:nth-child(2) { animation-delay: 0.1s; }
+.el-menu-item:nth-child(3) { animation-delay: 0.15s; }
+.el-menu-item:nth-child(4) { animation-delay: 0.2s; }
+.el-menu-item:nth-child(5) { animation-delay: 0.25s; }
+.el-menu-item:nth-child(6) { animation-delay: 0.3s; }
+.el-menu-item:nth-child(7) { animation-delay: 0.35s; }
+.el-menu-item:nth-child(8) { animation-delay: 0.4s; }
+.el-menu-item:nth-child(9) { animation-delay: 0.45s; }
+
+@keyframes fadeInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 </style>
