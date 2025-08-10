@@ -5,10 +5,12 @@
                 <div class="card-header">
                     <h3 class="card-title">算法管理</h3>
                     <div class="card-actions">
-                        <el-button type="primary" @click="newAlo" :icon="Plus">
+                        <el-button type="primary" @click="newAlo">
+                            <el-icon><Plus /></el-icon>
                             创建算法
                         </el-button>
-                        <el-button type="success" @click="exportAlo()" :icon="Download">
+                        <el-button type="success" @click="exportAlo()">
+                            <el-icon><Download /></el-icon>
                             导出算法库
                         </el-button>
                     </div>
@@ -20,11 +22,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted, nextTick, onActivated } from 'vue'
+import { useRouter, onBeforeRouteUpdate } from 'vue-router'
 import { ElMessageBox, ElMessage } from 'element-plus'
-import { Plus, Download } from '@element-plus/icons-vue'
 import { useWebSocket } from '@/composables/useWebSocket'
+import { useAlgorithmStore } from '../../store/algorithm'
 
 // handsontable
 import { HotTable } from '@handsontable/vue3'
@@ -36,6 +38,7 @@ registerAllModules()
 
 const router = useRouter()
 const { sendCommand, setMessageHandler } = useWebSocket()
+const store = useAlgorithmStore()
 
 // Refs
 const hot = ref<any>(null)
@@ -44,17 +47,21 @@ const algorithms = ref<any[]>([])
 
 // Lifecycle hooks
 onMounted(async () => {
-    await initializeComponent()
-})
-
-const initializeComponent = async () => {
-    await nextTick()
-
     if (hot.value?.hotInstance) {
         hot.value.hotInstance.addHook('afterOnCellMouseDown', (_event: any, coords: any) => {
             handleCellClick(coords)
         })
     }
+
+    await initializeComponent()
+})
+
+onActivated(async () => {
+    await initializeComponent()
+})
+
+const initializeComponent = async () => {
+    await nextTick()
 
     // 设置WebSocket消息处理
     setMessageHandler(handleMessage)
@@ -165,19 +172,15 @@ const handleCellClick = (coords: any) => {
 // 处理执行算法
 const handleExecuteAlgorithm = async (algorithm: any) => {
     try {
-        await ElMessageBox.confirm("确定调用此算法？", "提示", {
+        ElMessageBox.confirm("确定调用此算法？", "提示", {
             confirmButtonText: '确定',
             cancelButtonText: '取消',
         })
-
-        router.push({
-            path: '/alg',
-            query: { id: algorithm.id }
-        })
-
-        console.log("跳转到算法执行页面:", algorithm.id)
+        // 用户确认后执行路由跳转
+        router.push({ path: '/alg', query: { id: algorithm.id } })
     } catch {
-        // 用户取消操作
+        // 用户取消操作，不执行任何操作
+        console.log("用户取消执行算法")
     }
 }
 

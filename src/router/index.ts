@@ -8,10 +8,11 @@ const Alg = () => import('../views/aloTable/alo.vue')
 const NewTable = () => import('../views/newTable/newTable.vue')
 const Table = () => import('../views/newTable/Table.vue')
 const Create = () => import('../views/aloTable/create.vue')
-const FlowChart = () => import('../views/flowChart/flowChart.vue')
+// const FlowChart = () => import('../views/flowChart/flowChart.vue')
+const FlowChart = () => import('../views/flowChart/flowChart_old.vue')
 const UpLoad = () => import('../views/upLoad/upLoad.vue')
 const SeePicture = () => import('../views/rectangle/seeRect.vue')
-const Flow = () => import('../views/rectangle/rectangle.vue')
+const Rectangle = () => import('../views/rectangle/rectangle.vue')
 const CalHotAndCold = () => import('../views/calHotAndCold/cal.vue')
 const Document = () => import('../views/document/document.vue')
 
@@ -81,7 +82,7 @@ const routes: RouteRecordRaw[] = [
                 name: '查看产品树',
                 component: FlowChart,
                 meta: {
-                    keepAlive: true,
+                    keepAlive: false,
                     title: '查看产品树'
                 }
             },
@@ -99,14 +100,14 @@ const routes: RouteRecordRaw[] = [
                 name: '自定义框图',
                 component: SeePicture,
                 meta: {
-                    keepAlive: true,
+                    keepAlive: false,
                     title: '自定义框图'
                 }
             },
             {
-                path: '/flow',
+                path: '/rectangle',
                 name: '查看框图',
-                component: Flow,
+                component: Rectangle,
                 meta: {
                     keepAlive: false,
                     title: '查看框图'

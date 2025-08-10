@@ -11,6 +11,9 @@ export const useAlgorithmStore = defineStore('algorithm', {
         setAloId(id: number) {
             this.aloId = id
         },
+        getAloId() {
+            return this.aloId
+        },
         setAloValue(value: any) {
             this.aloValue = value
         },

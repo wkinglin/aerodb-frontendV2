@@ -101,7 +101,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, onMounted, watch, onActivated } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Plus,
@@ -110,7 +110,6 @@ import {
   Check,
   Grid
 } from '@element-plus/icons-vue'
-import { useMainStore } from '@/store'
 import globalWebSocket from '@/global'
 import { useRoute } from 'vue-router'
 
@@ -145,7 +144,16 @@ const form = reactive({
 })
 
 const row = ref(0)
-// tableData 移除，直接在save函数中构造
+// 当前表格数据（替代store中的数据）
+const currentTableData = ref({
+  id: '',
+  name: '',
+  valid: false,
+  headers: [] as string[],
+  headersType: [] as string[],
+  colnum: 0,
+  rownum: 0
+})
 
 const ccN = reactive({
   name: "",
@@ -153,7 +161,6 @@ const ccN = reactive({
   newname: [] as string[],
 })
 
-// SourceData 移除，直接使用hotInstance.getSourceData()
 const hotData = ref([] as any[])
 const hotDataId = ref([] as any[])
 const newName = ref("")
@@ -207,8 +214,7 @@ const rules = reactive({
   ],
 })
 
-// 获取路由和store实例
-const store = useMainStore()
+// 获取路由实例
 const route = useRoute()
 
 // 表单引用
@@ -220,58 +226,51 @@ const socket = ref<WebSocket | null>(null)
 
 // 组件挂载时初始化
 onMounted(() => {
+  //初始化WebSocket
+  initWebSocket()
+})
+
+onActivated(() => {
   init()
 })
 
 // 响应式的当前表格ID
 const currentTableId = ref<string>('')
 
-// 安全获取当前表格数据的辅助函数
-const getCurrentTable = () => {
-  if (!currentTableId.value) {
-    return null
-  }
-  return store.findTableById(currentTableId.value)
-}
-
 const init = () => {
-  // 从路由获取表格ID
+  // 从路由获取表格ID和名称
   const tableId = route.query.table_id as string
+  const tableName = route.query.table_name as string
+  
   if (!tableId) {
     ElMessage.error('表格ID不能为空')
     return
   }
 
   currentTableId.value = tableId
-
-  // 获取当前表格数据
-  const currentTable = getCurrentTable()
-  if (!currentTable) {
-    ElMessage.error('找不到指定的数据库')
-    return
+  
+  // 初始化当前表格数据
+  currentTableData.value = {
+    id: tableId,
+    name: tableName || '未知表格',
+    valid: false,
+    headers: [],
+    headersType: [],
+    colnum: 0,
+    rownum: 0
   }
 
-  // 为兼容保留row.value，但不再用于数组索引
-  row.value = store.findTableIndexById(tableId) + 1
+  // 为兼容保留row.value
+  row.value = 1
 
-  dialogVisible.value = currentTable.valid || false
+  dialogVisible.value = currentTableData.value.valid || false
 
   //初始化WebSocket
   initWebSocket()
 
   //获取表格数据
   send("getUserTable")
-  send(currentTable.name)
-
-  //重新渲染表格
-  if (!dialogVisible.value) {
-    setTimeout(() => {
-      renderTable()
-    }, 10)
-  }
-
-  //添加数据
-  form.colHeadersData = currentTable.headers || []
+  send(currentTableData.value.name)
 }
 
 const initWebSocket = () => {
@@ -314,6 +313,9 @@ const getInput = (msg: any) => {
         })
       }
 
+      //添加数据
+      form.colHeadersData = json_data.column?.map((col: any) => col.name) || []
+
       console.log('更新后的hotData:', hotData.value)
     }
   } catch (error) {
@@ -342,8 +344,7 @@ const getMessage = (msg: any) => {
 
 //添加行数
 const addNewRow = () => {
-  const currentTable = getCurrentTable()
-  if (!currentTable) {
+  if (!currentTableData.value) {
     ElMessage.error('表格数据不存在')
     return
   }
@@ -351,7 +352,7 @@ const addNewRow = () => {
   if (hotRef.value && hotRef.value.hotInstance) {
     const currentRows = hotRef.value.hotInstance.countRows()
     hotRef.value.hotInstance.alter('insert_row_below', currentRows)
-    currentTable.rownum++
+    currentTableData.value.rownum++
     ElMessage.success('已添加新行')
   }
 }
@@ -371,9 +372,8 @@ const removeRow = () => {
       type: 'warning',
     }).then(() => {
       hotRef.value.hotInstance.alter('remove_row', currentRows - 1)
-      const currentTable = getCurrentTable()
-      if (currentTable) {
-        currentTable.rownum--
+      if (currentTableData.value) {
+        currentTableData.value.rownum--
       }
       ElMessage.success('已删除行')
     }).catch(() => {
@@ -387,8 +387,7 @@ const addNewCol = () => {
 }
 
 const removeCol = () => {
-  const currentTable = getCurrentTable()
-  if (!currentTable) {
+  if (!currentTableData.value) {
     ElMessage.error('表格数据不存在')
     return
   }
@@ -400,7 +399,7 @@ const removeCol = () => {
       return
     }
 
-    const headers = currentTable.headers || []
+    const headers = form.colHeadersData || []
     if (headers.length === 0) {
       ElMessage.error('表头信息不存在')
       return
@@ -416,21 +415,18 @@ const removeCol = () => {
       // 发送删除列的消息
       send("delColumn")
       const delCol = {
-        name: currentTable.name,
+        name: currentTableData.value.name,
         column: lastColumnName
       }
+      console.log(delCol)
       send(JSON.stringify(delCol))
 
       // 修改表格
       hotRef.value.hotInstance.alter('remove_col', currentCols - 1)
 
-      // 更新store
-      const tableIndex = store.findTableIndexById(currentTableId.value)
-      if (tableIndex !== -1) {
-        store.deleteTableHeader({
-          i: tableIndex,
-        })
-      }
+      // 更新本地数据
+      currentTableData.value.headers.pop()
+      currentTableData.value.headersType.pop()
 
       ElMessage.success('已删除列')
     }).catch(() => {
@@ -445,11 +441,15 @@ const onSubmit = () => {
     if (valid) {
       changeColAndRow(parseInt(form.columnNumbers), parseInt(form.rowNumbers))
 
-      //记录数据
-      store.changeTableNameById(currentTableId.value, form.name)
+      //记录数据 - 直接更新本地数据
+      currentTableData.value.name = form.name
+      currentTableData.value.headers = [...form.colHeadersData]
+      currentTableData.value.headersType = [...form.colHeadersType]
+      currentTableData.value.colnum = parseInt(form.columnNumbers)
+      currentTableData.value.rownum = parseInt(form.rowNumbers)
+      
       getColHeaders()
       dialogVisible.value = false
-      // renderPage = true
 
     } else {
       ElMessage.error('提交失败')
@@ -478,18 +478,16 @@ const save = () => {
     // 获取表格数据
     const sourceData = hotInstance.getSourceData()
 
-    // 获取当前表格数据
-    const currentTable = getCurrentTable()
-    if (!currentTable) {
+    if (!currentTableData.value) {
       ElMessage.error('表格数据不存在')
       return
     }
 
     // 处理表头数据（如果是新创建的表）
-    if (currentTable.valid === true) {
+    if (currentTableData.value.valid === true) {
       const tableHeaderData = {
-        name: currentTable.name,
-        header: (currentTable.headers || []).map((headerName: string, index: number) => ({
+        name: currentTableData.value.name,
+        header: (currentTableData.value.headers || []).map((headerName: string, index: number) => ({
           key: headerName,
           type: form.colHeadersType[index] || '2' // 默认为字符类型
         }))
@@ -501,18 +499,20 @@ const save = () => {
 
     // 发送表格数据
     const tableData = {
-      name: currentTable.name,
+      name: currentTableData.value.name,
       data: sourceData
     }
 
     send("insert")
     send(JSON.stringify(tableData))
 
+    // 设置消息处理 - 检查保存前的状态
+    const wasNewTable = currentTableData.value.valid === true
+    
     // 更新表格状态
-    store.changeTableValidById(currentTableId.value, false)
+    currentTableData.value.valid = false
 
-    // 设置消息处理
-    if (currentTable.valid === true && socket.value) {
+    if (wasNewTable && socket.value) {
       socket.value.onmessage = getMessage
     } else {
       ElMessage.success('保存成功')
@@ -532,22 +532,13 @@ const getColHeaders = () => {
     console.log(colnum)
     console.log(rownum)
 
-    //修改表格数据
-    const tableIndex = store.findTableIndexById(currentTableId.value)
-    if (tableIndex !== -1) {
-      for (var i = 0; i < form.colHeadersData.length; i++) {
-        store.changeTableData({
-          row: tableIndex + 1, // changeTableData期望从1开始的索引
-          i: i,
-          colnum: form.colHeadersData.length,
-          rownum: parseInt(form.rowNumbers),
-          element: form.colHeadersData[i]
-        })
-      }
-    }
+    // 直接更新本地表头数据
+    currentTableData.value.headers = [...form.colHeadersData]
+    currentTableData.value.headersType = [...form.colHeadersType]
+    currentTableData.value.colnum = colnum
+    currentTableData.value.rownum = rownum
 
-    const currentTable = getCurrentTable()
-    console.log(currentTable)
+    console.log(currentTableData.value)
     hotRef.value.hotInstance.updateSettings({
       colHeaders: makeColHeaders()
     })
@@ -561,16 +552,15 @@ const turnInt = (num: string | number) => {
 
 //修改表头按钮函数
 const changeColHeaders = () => {
-  const currentTable = getCurrentTable()
-  if (!currentTable) {
+  if (!currentTableData.value) {
     ElMessage.error('表格数据不存在')
     return
   }
 
-  ccN.oldname = JSON.parse(JSON.stringify(currentTable.headers || []))
+  ccN.oldname = JSON.parse(JSON.stringify(currentTableData.value.headers || []))
   //重新赋值
-  form.colHeadersData = currentTable.headers || []
-  form.colHeadersType = currentTable.headersType || []
+  form.colHeadersData = currentTableData.value.headers || []
+  form.colHeadersType = currentTableData.value.headersType || []
 
   dialogVisible2.value = true
 }
@@ -582,10 +572,9 @@ const onSubmit2 = () => {
 
   //传送数据
   send("changeColumnName")
-  const currentTable = getCurrentTable()
-  if (currentTable) {
-    ccN.newname = currentTable.headers || []
-    ccN.name = currentTable.name
+  if (currentTableData.value) {
+    ccN.newname = currentTableData.value.headers || []
+    ccN.name = currentTableData.value.name
   }
   send(JSON.stringify(ccN))
 
@@ -595,31 +584,7 @@ const onSubmit2 = () => {
 
 //修改表头
 const makeColHeaders = () => {
-  const currentTable = getCurrentTable()
-  return currentTable?.headers || []
-}
-
-//重新渲染
-const renderTable = () => {
-  const currentTable = getCurrentTable()
-  if (!currentTable) {
-    console.error('表格数据不存在')
-    return
-  }
-
-  console.log(currentTable.headers)
-  console.log(currentTable.headers?.length || 0)
-  console.log(currentTable.rownum)
-
-  //重新渲染表格
-  // hotRef.value?.hotInstance.updateSettings({
-  //   startCols: currentTable.headers?.length || 0,
-  //   startRows: currentTable.rownum,
-  //   colHeaders: makeColHeaders()
-  // })
-  if (IfUpdateData.value) {
-    // hotRef.value?.hotInstance.updateData(hotData.value)
-  }
+  return currentTableData.value?.headers || []
 }
 
 const changeColAndRow = (colnum: number, rownum: number) => {
@@ -649,36 +614,25 @@ const changeColAndRow = (colnum: number, rownum: number) => {
 
 
 const onSubmit3 = () => {
-  const tableIndex = store.findTableIndexById(currentTableId.value)
-  if (tableIndex !== -1) {
-    store.changeTableData({
-      row: tableIndex + 1, // changeTableData期望从1开始的索引
-      i: 0, // 这里需要根据实际列数调整
-      colnum: 1,
-      rownum: parseInt(form.rowNumbers),
-      element: newName.value,
-    })
-    store.changeTableType({
-      row: tableIndex + 1, // changeTableType期望从1开始的索引
-      i: 0, // 这里需要根据实际列数调整
-      element: newType.value,
-    })
-  }
+  // 直接更新本地表头数据
+  currentTableData.value.headers.push(newName.value)
+  currentTableData.value.headersType.push(newType.value.toString())
 
   send("addColumn")
-  const currentTable = getCurrentTable()
-  if (currentTable) {
+  if (currentTableData.value) {
     const newcol = {
-      name: currentTable.name,
+      name: currentTableData.value.name,
       column: newName.value,
       type: newType.value,
     }
     send(JSON.stringify(newcol))
-    console.log(currentTable.headers)
   }
   newName.value = ""
   newType.value = 0
   dialogVisible3.value = false
+
+  // 刷新页面
+  init()
 }
 
 //重置表单

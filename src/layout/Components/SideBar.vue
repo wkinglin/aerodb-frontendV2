@@ -32,7 +32,7 @@
           <el-icon>
             <Plus />
           </el-icon>
-          <template #title>新建数据库</template>
+          <template #title>查看数据库</template>
         </el-menu-item>
 
         <el-menu-item index="/create">
@@ -97,7 +97,7 @@ const props = defineProps({
 const isCollapse = ref(props.isCollapsed)
 
 // 监听属性变化
-watch(() => props.isCollapsed, (newVal) => {
+watch(() => props.isCollapsed, (newVal: boolean) => {
   isCollapse.value = newVal
 })
 </script>
@@ -225,6 +225,8 @@ watch(() => props.isCollapsed, (newVal) => {
   border: none;
   color: #5a6c7d;
   font-weight: 500;
+  display: flex; /* 设置为flex布局，以便在展开时对齐图标和文字 */
+  align-items: center; /* 垂直居中对齐 */
 }
 
 .el-menu-item::before {
@@ -259,18 +261,6 @@ watch(() => props.isCollapsed, (newVal) => {
   border: 1px solid rgba(102, 126, 234, 0.2);
 }
 
-.el-menu-item.is-active::after {
-  content: '';
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 4px;
-  height: 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 2px;
-}
-
 .el-menu-item .el-icon {
   margin-right: 12px;
   font-size: 18px;
@@ -286,17 +276,38 @@ watch(() => props.isCollapsed, (newVal) => {
   transform: scale(1.1);
 }
 
-/* 折叠状态下的样式 */
+/* --- 修改开始：折叠状态下的样式 --- */
 .el-menu--collapse .el-menu-item {
+  /* 
+    使用 Flexbox 实现完美的水平和垂直居中
+    这会覆盖上面 .el-menu-item 的 align-items 设置
+  */
+  justify-content: center; /* 水平居中 */
+  align-items: center;     /* 垂直居中 */
+  
+  /* 调整折叠后的边距和内边距 */
   margin: 4px 8px;
-  text-align: center;
-  justify-content: center;
+  padding: 0 !important; /* 清除可能存在的内边距干扰 */
 }
 
 .el-menu--collapse .el-menu-item .el-icon {
+  /* 清除展开状态下的右边距，以确保图标完全居中 */
   margin-right: 0;
-  font-size: 20px;
+  font-size: 20px; /* 可以在这里微调图标大小 */
 }
+
+/* 
+  当菜单折叠时，Element Plus 会用一个 tooltip 包裹内容。
+  我们需要确保这个包裹容器也居中显示。
+*/
+.el-menu--collapse .el-menu-item .el-tooltip__trigger {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%; /* 确保触发器占满整个菜单项宽度 */
+    height: 100%;
+}
+/* --- 修改结束 --- */
 
 /* 容器样式 */
 .el-aside {

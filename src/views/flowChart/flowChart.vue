@@ -143,7 +143,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   Plus,
@@ -153,9 +153,10 @@ import {
   Grid
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { Graph, register } from '@antv/g6'
 import { useMainStore } from '@/store'
 import globalWebSocket from '@/global'
+import { Renderer as WebGLRenderer } from '@antv/g-webgl';
+import { Graph, register } from '@antv/g6'
 
 // 响应式数据
 const input = ref('')
@@ -201,14 +202,12 @@ const socket = ref<WebSocket | null>(null)
 
 // 生命周期钩子
 onMounted(() => {
+  initializeChart()
+})
 
-  const initializeApp = () => {
-    init()
-    initializeChart()
-    send('systemAll')
-  }
-
-  setTimeout(initializeApp, 100)
+onActivated(() => {
+  init()
+  send('systemAll')
 })
 
 onUnmounted(() => {
@@ -233,14 +232,9 @@ const initializeChart = () => {
 const init = () => {
   socket.value = globalWebSocket.ws as WebSocket
   if (socket.value) {
-    socket.value.onopen = open
     socket.value.onerror = error
     socket.value.onmessage = getMessage
   }
-}
-
-const open = () => {
-  console.log('WebSocket连接成功')
 }
 
 const error = () => {
@@ -249,7 +243,7 @@ const error = () => {
 }
 
 const send = (ms: string) => {
-  if (socket.value && socket.value.readyState === WebSocket.OPEN) {
+  if (socket.value) {
     socket.value.send(ms)
   } else {
     ElMessage.error('连接未建立，请稍后重试')
@@ -274,13 +268,13 @@ const getMessage = (msg: MessageEvent) => {
       return
     }
 
-    // 安全解析JSON数据，替换不安全的eval
     const parsedData = JSON.parse(msg.data)
     json.value = Array.isArray(parsedData) ? parsedData : []
+    console.log("json.value",json.value)
 
     // 清空并重新填充系统列表
     systems.value = []
-    json.value.forEach((item, index) => {
+    json.value.forEach((item: any, index: number) => {
       // 安全检查系统数据
       if (!item || !item.name) {
         console.warn('系统数据无效:', item)
@@ -297,6 +291,7 @@ const getMessage = (msg: MessageEvent) => {
         Z: item.Z
       })
     })
+
   } catch (error) {
     console.error('解析消息失败:', error)
     ElMessage.error('数据解析失败')
@@ -326,7 +321,7 @@ const getProducts = (msg: MessageEvent) => {
 
 const selectSys = () => {
   const targetId = deleteForm.sysId || moveForm.toSystemId
-  const system = json.value.find(item => item && item.id === targetId)
+  const system = json.value.find((item: any) => item && item.id === targetId)
   if (system && Array.isArray(system.pro)) {
     products.value = system.pro.filter((pro: any) => pro && pro.name) || []
     proVisible.value = true
@@ -427,7 +422,7 @@ const search = () => {
     return
   }
 
-  const systemIndex = json.value.findIndex(item => item && item.name === input.value.trim())
+  const systemIndex = json.value.findIndex((item: any) => item && item.name === input.value.trim())
   if (systemIndex !== -1) {
     value.value = `选项${systemIndex}`
     buildTreeData(systemIndex)
@@ -444,18 +439,24 @@ const buildTreeData = (systemIndex: number) => {
     return
   }
 
-  const root = {
-    id: `sys${sys.id}`,
-    label: sys.name,
-    description: `R:${sys.R || ''} DR:${sys.DR || ''} H:${sys.H || ''} Z:${sys.Z || ''}`,
-    R: sys.R,
-    DR: sys.DR,
-    H: sys.H,
-    Z: sys.Z,
-    children: [] as any[]
-  }
+  const nodes: any[] = []
+  const edges: any[] = []
 
-  let nodeCount = 0
+  // 根节点（系统节点）
+  const rootId = `sys${sys.id}`
+  nodes.push({
+    id: rootId,
+    data: {
+      label: sys.name,
+      description: `R:${sys.R || ''} DR:${sys.DR || ''} H:${sys.H || ''} Z:${sys.Z || ''}`,
+      R: sys.R,
+      DR: sys.DR,
+      H: sys.H,
+      Z: sys.Z
+    }
+  })
+
+  let nodeCount = 1
 
   // 构建产品节点
   sys.pro?.forEach((pro: any) => {
@@ -465,22 +466,34 @@ const buildTreeData = (systemIndex: number) => {
       return
     }
 
-    const productNode = {
-      id: `pro${pro.id}`,
-      label: pro.name,
-      description: `R:${pro.R || ''} DR:${pro.DR || ''} H:${pro.H || ''} Z:${pro.Z || ''}`,
-      R: pro.R,
-      DR: pro.DR,
-      H: pro.H,
-      Z: pro.Z,
-      children: [] as any[]
-    }
+    const productId = `pro${pro.id}`
+    nodes.push({
+      id: productId,
+      data: {
+        label: pro.name,
+        description: `R:${pro.R || ''} DR:${pro.DR || ''} H:${pro.H || ''} Z:${pro.Z || ''}`,
+        R: pro.R,
+        DR: pro.DR,
+        H: pro.H,
+        Z: pro.Z
+      }
+    })
+
+    // 添加系统到产品的边
+    edges.push({
+      id: `edge_${rootId}_${productId}`,
+      source: rootId,
+      target: productId,
+      data: {}
+    })
+
+    nodeCount++
 
     // 构建算法节点
     pro.alo?.forEach((algorithm: any) => {
       // 安全检查算法名称
       if (!algorithm || !algorithm.name || typeof algorithm.name !== 'string') {
-        console.warn('算法名称无效:', algorithm)
+        console.warn('算法名称无效:', pro,algorithm)
         return
       }
 
@@ -497,21 +510,34 @@ const buildTreeData = (systemIndex: number) => {
         aloName = aloName.substring(0, 16) + '...'
       }
 
-      productNode.children.push({
-        id: `alo${pro.id}aloID${algorithm.id}`,
-        label: aloName,
-        description: description || undefined
+      const algorithmId = `alo${pro.id}aloID${algorithm.id}`
+      nodes.push({
+        id: algorithmId,
+        data: {
+          label: aloName,
+          description: description || undefined,
+          algorithmId: algorithm.id
+        }
+      })
+
+      // 添加产品到算法的边
+      edges.push({
+        id: `edge_${productId}_${algorithmId}`,
+        source: productId,
+        target: algorithmId,
+        data: {}
       })
 
       nodeCount++
     })
 
     if (pro.alo?.length === 0) nodeCount++
-    root.children.push(productNode)
   })
 
   // 更新图表数据
-  data.value = root
+  data.value = { nodes, edges }
+
+  console.log(data.value)
 
   // 重新创建图表
   if (graph.value) {
@@ -519,13 +545,13 @@ const buildTreeData = (systemIndex: number) => {
   }
 
   const minNodes = Math.max(nodeCount, 3)
-  newGraph(1100, 120 * minNodes)
+  newGraph(900, 60 * minNodes)
 
   if (graph.value) {
-    graph.value.data(data.value)
+    graph.value.setData(data.value)
     graph.value.render()
     graph.value.fitCenter()
-    addNodeClickHandlers()
+    // addNodeClickHandlers()
   }
 }
 
@@ -559,68 +585,101 @@ const newGraph = (width: number, height: number) => {
     container: container,
     width: containerWidth,
     height: containerHeight,
+    
+    // 数据
+    data: data.value,
+    
+    // 插件配置
     plugins: [contextMenu],
+    
+    // 布局配置
     layout: {
       type: 'mindmap',
       direction: 'LR',
       preventOverlap: true,
-      getVGap: () => 50,
-      getHGap: () => 150
+      getVGap: () => 20,
+      getHGap: () => 100
     },
+    
+    // 节点配置 - 使用最简单的rect样式
     node: {
-      type: 'modelRect',
-      style: {
-        size: [280, 70],
-        fill: 'l(0) 0:#ffffff 1:#f5f7fa',
-        stroke: '#409eff',
-        lineWidth: 2,
-        cursor: 'pointer',
-        radius: 8,
-        shadowColor: 'rgba(64, 158, 255, 0.2)',
-        shadowBlur: 10,
-        shadowOffsetY: 4
+      type: 'rect',
+      style: (model: any) => {
+        const { data } = model;
+        const isAlgorithm = model.id.startsWith('alo');
+        const isSystem = model.id.startsWith('sys');
+        const isProduct = model.id.startsWith('pro');
+
+        // 确定节点类型和颜色
+        let nodeColor = '#52c41a';
+        let nodeTypeName = '算法';
+        if (isSystem) {
+          nodeColor = '#1890ff';
+          nodeTypeName = '系统';
+        } else if (isProduct) {
+          nodeColor = '#fa8c16';
+          nodeTypeName = '产品';
+        }
+
+        // 构建显示文本
+        let displayName = data?.label || '未命名';
+        if (displayName.length > 10) {
+          displayName = displayName.substring(0, 10) + '...';
+        }
+
+        // 构建详细信息文本
+        let detailText = '';
+        if (isAlgorithm) {
+          const desc = data.description || '无';
+          detailText = desc.length > 12 ? desc.substring(0, 12) + '...' : desc;
+        } else {
+          detailText = `R:${data.R || 0} DR:${data.DR || 0}\nH:${data.H || 0} Z:${data.Z || 0}`;
+        }
+
+        // 组合显示文本
+        const combinedText = `${displayName}\n[${nodeTypeName}]\n${detailText}`;
+
+        return {
+          size: [200, 60],
+          fill: nodeColor,
+          stroke: '#ffffff',
+          lineWidth: 2,
+          radius: 6,
+          cursor: 'pointer',
+          labelText: combinedText,
+          labelFill: '#ffffff',
+          labelFontSize: 10,
+          labelFontWeight: 'bold',
+          labelTextAlign: 'center',
+          labelTextBaseline: 'middle',
+          labelLineHeight: 12,
+          labelPlacement: 'center'
+        };
       },
-    },
-    edge: {
-      type: 'hvh',
-      style: {
-        stroke: '#409eff',
-        lineWidth: 2,
-        shadowColor: 'rgba(64, 158, 255, 0.3)',
-        shadowBlur: 5
+      state: {
+        selected: {
+          stroke: '#ffff00',
+          lineWidth: 3,
+        }
       }
-    }
-  })
-
-  // 注册自定义边类型
-  // G6.register('hvh', {
-  //   draw(cfg: any, group: any) {
-  //     const startPoint = cfg.startPoint
-  //     const endPoint = cfg.endPoint
-  //     const shape = group.addShape('path', {
-  //       attrs: {
-  //         stroke: '#409eff',
-  //         lineWidth: 2,
-  //         path: [
-  //           ['M', startPoint.x, startPoint.y],
-  //           ['L', endPoint.x / 3 + (2 / 3) * startPoint.x, startPoint.y],
-  //           ['L', endPoint.x / 3 + (2 / 3) * startPoint.x, endPoint.y],
-  //           ['L', endPoint.x, endPoint.y]
-  //         ]
-  //       },
-  //       name: 'path-shape'
-  //     })
-  //     return shape
-  //   }
-  // })
-
-  // 添加节点交互效果
-  graph.value.on('node:mouseenter', (e: any) => {
-    graph.value.setItemState(e.item, 'hover', true)
-  })
-
-  graph.value.on('node:mouseleave', (e: any) => {
-    graph.value.setItemState(e.item, 'hover', false)
+    },
+    
+    // 边配置 - 简化
+    edge: {
+      type: 'line',
+      style: {
+        stroke: '#ccc',
+        lineWidth: 1,
+        endArrow: true,
+      }
+    },
+    
+    // behaviors: [{
+    //   type: 'click-select',
+    //   onClick: (e: any) => {
+    //     console.log(e)
+    //   }
+    // }],
   })
 }
 
@@ -630,17 +689,27 @@ const addNodeClickHandlers = () => {
 
   graph.value.on('node:click', (e: any) => {
     // 清除其他节点的点击状态
-    const clickNodes = graph.value.findAllByState('node', 'click')
-    clickNodes.forEach((node: any) => {
-      graph.value.setItemState(node, 'click', false)
+    const allNodes = graph.value.getAllNodesData()
+    allNodes.forEach((nodeData: any) => {
+      graph.value.setElementState(nodeData.id, 'click', false)
     })
 
     // 设置当前节点的点击状态
-    const nodeItem = e.item
-    graph.value.setItemState(nodeItem, 'click', true)
+    const nodeId = e.target.id
+    const nodeData = graph.value.getNodeData(nodeId)
+    graph.value.setElementState(nodeId, 'click', true)
 
-    const nodeId = nodeItem._cfg.id
-    const nodeName = nodeItem._cfg.model.label
+    const nodeName = nodeData?.data?.label || ''
+
+    // 获取点击位置
+    const { canvasY } = e.canvas || {}
+    const nodeBox = graph.value.getNodeData(nodeId)
+    const nodeY = nodeBox?.data?.y || 0
+
+    // 判断是否点击在按钮区域（节点下半部分）
+    const isButtonClick = canvasY && nodeY && (canvasY - nodeY) > 30
+
+    console.log('节点点击:', { nodeId, nodeName, isButtonClick, canvasY, nodeY })
 
     // 处理算法节点点击
     if (nodeId.startsWith('alo')) {

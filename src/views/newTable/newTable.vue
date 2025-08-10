@@ -4,9 +4,9 @@
       <template #header>
         <div class="header-content">
           <div class="header-left">
-            <el-button type="primary" @click="creatTables()" :icon="Plus" size="large">
+            <!-- <el-button type="primary" @click="creatTables()" :icon="Plus" size="large">
               新建数据库
-            </el-button>
+            </el-button> -->
           </div>
           <div class="header-right">
             <div class="search-container">
@@ -83,7 +83,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -96,7 +96,6 @@ import {
   Delete
 } from '@element-plus/icons-vue'
 import globalWebSocket from '@/global'
-import { useMainStore } from '@/store'
 
 // 响应式数据
 const tablenumbers = ref(0)
@@ -120,15 +119,14 @@ const rules = reactive({
   ]
 })
 
-// 获取路由和store实例
+// 获取路由实例
 const router = useRouter()
-const store = useMainStore()
 
 // 初始化socket
 const socket = ref<WebSocket | null>(null)
 
 // 组件挂载时初始化
-onMounted(() => {
+onActivated(() => {
   init()
   send("getAllUserTables")
 })
@@ -155,34 +153,16 @@ const getMessage = (msg: any) => {
     // 安全解析JSON数据，避免使用eval
     const data = JSON.parse(msg.data)
     const arr = Array.isArray(data) ? data : []
-    const l = arr.length
-
-    for (let i = 0; i < l; i++) {
-      let exists = false
-
-      // 检查是否已存在相同名称的数据库
-      if (store.tableData.length > 0) {
-        exists = store.tableData.some(table => table.name === arr[i])
-      }
-
-      if (exists) continue
-
-      //增加数据库
-      store.increment()
-      //修改数据库名字
-      store.changeTableName({
-        i: store.tableData.length - 1, // 使用正确的索引
-        name: arr[i],
-      })
-      //取消显示设置表单
-      store.changeTableValid({
-        i: store.tableData.length - 1,
-        valid: false,
-      })
-    }
-    store.newTableValible = false
-
-    tableData.value = store.tableData
+    
+    // 直接设置tableData，不使用store缓存
+    const newTableData = arr.map((name: string, index: number) => ({
+      id: `table_${Date.now()}_${index}_${Math.random().toString(36).substring(2, 11)}`,
+      name: name,
+      valid: false
+    }))
+    
+    tableData.value = newTableData
+    originalTableData.value = [...newTableData] // 保存原始数据用于搜索
   } catch (error) {
     console.error('解析WebSocket消息失败:', error)
     ElMessage.error('数据解析失败')
@@ -190,8 +170,14 @@ const getMessage = (msg: any) => {
 }
 
 const creatTables = () => {
+  // 直接发送创建表格请求，不使用store
   tablenumbers.value++
-  store.increment()
+  const newTable = {
+    id: `table_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
+    name: `表格${tablenumbers.value}`,
+    valid: true
+  }
+  tableData.value.push(newTable)
 }
 
 
@@ -227,8 +213,8 @@ const onSubmitName = () => {
 
   formRef.value.validate((valid: boolean) => {
     if (valid) {
-      // 检查名称是否已存在
-      const exists = store.tableData.some((table, idx) =>
+      // 检查名称是否已存在（在当前tableData中检查）
+      const exists = tableData.value.some((table, idx) =>
         table.name === formData.name && idx !== index.value
       )
 
@@ -249,7 +235,9 @@ const onSubmitName = () => {
         newname: formData.name,
       }
       send(JSON.stringify(payload))
-      store.changeTableNameById(currentTable.id, formData.name)
+      
+      // 直接更新本地数据
+      currentTable.name = formData.name
 
       ElMessage.success('重命名成功')
       dialogVisible.value = false
@@ -258,13 +246,16 @@ const onSubmitName = () => {
   })
 }
 
+// 原始完整数据（用于搜索重置）
+const originalTableData = ref([] as any[])
+
 const searchTables = () => {
   if (!search.value.trim()) {
-    tableData.value = store.tableData
+    tableData.value = [...originalTableData.value]
     return
   }
 
-  tableData.value = store.tableData.filter(table =>
+  tableData.value = originalTableData.value.filter(table =>
     table.name.toLowerCase().includes(search.value.toLowerCase())
   )
 }
@@ -276,7 +267,7 @@ const handleClose = (done: any) => {
 }
 
 const seeAll = () => {
-  tableData.value = store.tableData
+  tableData.value = [...originalTableData.value]
   search.value = ""
 }
 
@@ -303,8 +294,13 @@ const deleteRows = (idx: number) => {
   send("deleteUserTable")
   send(JSON.stringify(UserTable))
 
-  //执行删除操作
-  store.deleteTableById(table.id)
+  //执行删除操作 - 直接从本地数组删除
+  tableData.value.splice(idx, 1)
+  // 同时从原始数据中删除
+  const originalIndex = originalTableData.value.findIndex(t => t.id === table.id)
+  if (originalIndex !== -1) {
+    originalTableData.value.splice(originalIndex, 1)
+  }
   ElMessage.success('删除成功')
 }
 </script>

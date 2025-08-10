@@ -22,6 +22,9 @@
           <div class="el-upload__tip">
             csv files with a size less than 10MB
           </div>
+          <div class="el-upload__tip">
+            上传的文件列头不能以数字开头
+          </div>
         </template>
       </el-upload>
 
@@ -109,16 +112,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onActivated } from 'vue'
 import { ElMessage } from 'element-plus'
-import {
-  UploadFilled,
-  SuccessFilled,
-  WarningFilled,
-  CircleCloseFilled,
-  DocumentCopy,
-  Close
-} from '@element-plus/icons-vue'
 import { useWebSocket } from '@/composables/useWebSocket'
 import type { UploadFile, UploadProps, FormInstance } from 'element-plus'
 
@@ -176,6 +171,10 @@ onMounted(() => {
   initializeComponent()
 })
 
+onActivated(() => {
+  isUploading.value = false
+})
+
 const initializeComponent = () => {
   setMessageHandler(handleMessage)
   console.log('文件上传页面初始化完成')
@@ -213,7 +212,7 @@ const handleMessage = (msg: MessageEvent) => {
       }
     } else if (typeof data === 'object') {
       // JSON对象响应
-      if (data.success || data.status === 'success') {
+      if (data.message.includes('成功') ) {
         ElMessage.success(data.message || '文件上传成功')
         showUploadResult(data.message || '上传成功')
         resetForm()
@@ -330,7 +329,7 @@ const uploadFile = async () => {
     // 准备上传数据
     const uploadData = {
       name: form.filename.trim(),
-      isMerge: Boolean(form.isMerge),
+      isMerge: String(form.isMerge),
       path: (file.raw as any).path || file.name,
       size: file.size,
       type: file.raw.type

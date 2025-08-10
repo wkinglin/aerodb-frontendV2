@@ -96,48 +96,88 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import go from "gojs";
 const $ = go.GraphObject.make;
 import VSwatches from 'vue-swatches'
 import 'vue-swatches/dist/vue-swatches.css'
-import { ref, onMounted, inject } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted, onActivated, inject, Ref } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
-const router = useRouter()
-const globalWebSocket = inject('globalWebSocket')
-const $store = inject('$store')
+// 类型定义
+interface SysAndProId {
+  sysId: number
+  proId: number
+}
 
-const visible = ref(false)
-const groupName = ref('')
-const edgeValue = ref('')
-const value = ref('')
-const valueColor = ref('pink')
-const valueGroup = ref('')
-const alo = ref([])
-const id = ref(0)
-const recId = ref(0)
-const dialogVisible = ref(false)
-const changeNodeVisible = ref(false)
-const pictureName = ref('')
-const addAloName = ref('')
-const addColor = ref('')
-const addLineFrom = ref('')
-const addLineTo = ref('')
-const diagram = ref('')
-const diagramModel = ref('')
-const contextMenu = ref('')
-const contextMenuGroup = ref('')
-const message = ref([])
-const rec = ref([])
-const RHZvalue = ref({
+interface AloData {
+  aloId: number
+  aloValue: any
+  recId: number
+  isTurnAlo: boolean
+}
+
+interface RHZValue {
+  R: string | number
+  H: string | number
+  Z: string | number
+}
+
+interface NodeData {
+  R: number
+  DR: number
+  H: number
+  Z: number
+  backup: number
+  key: string
+}
+
+interface AloForm {
+  R: string
+  DR: string
+  H: string
+  Z: string
+}
+
+const router = useRouter()
+const route = useRoute()
+const globalWebSocket = inject('globalWebSocket') as any
+
+// 从路由参数获取数据
+const pictureName: Ref<string> = ref('')
+const id: Ref<number> = ref(0)
+const isSystem: Ref<boolean> = ref(false)
+const sysAndProId: Ref<SysAndProId> = ref({ sysId: 0, proId: 0 })
+const currentAloData: Ref<AloData> = ref({ aloId: 0, aloValue: null, recId: 0, isTurnAlo: false })
+
+const visible: Ref<boolean> = ref(false)
+const groupName: Ref<string> = ref('')
+const edgeValue: Ref<string> = ref('')
+const value: Ref<string> = ref('')
+const valueColor: Ref<string> = ref('pink')
+const valueGroup: Ref<string> = ref('')
+const alo: Ref<any[]> = ref([])
+const recId: Ref<number> = ref(0)
+const dialogVisible: Ref<boolean> = ref(false)
+const changeNodeVisible: Ref<boolean> = ref(false)
+const addAloName: Ref<string> = ref('')
+const addColor: Ref<string> = ref('')
+const addLineFrom: Ref<string> = ref('')
+const addLineTo: Ref<string> = ref('')
+const diagram: Ref<any> = ref(null)
+const diagramModel: Ref<any> = ref(null)
+const contextMenu: Ref<any> = ref(null)
+const contextMenuGroup: Ref<any> = ref(null)
+const message: Ref<any[]> = ref([])
+const rec: Ref<any[]> = ref([])
+const RHZvalue: Ref<RHZValue> = ref({
     R: '',
     H: '',
     Z: ''
 })
-const changeNodeId = ref('')
-const nodeData = ref({ 
+const changeNodeId: Ref<string> = ref('')
+const nodeData: Ref<NodeData> = ref({ 
     R: 0,
     DR: 0,
     H: 0,
@@ -145,61 +185,55 @@ const nodeData = ref({
     backup: 0,
     key: '',
 })
-const aloForm = ref({
+const aloForm: Ref<AloForm> = ref({
     R: '',
     DR: '',
     H: '',
     Z: '',
 })
-const nodes = ref([])
-const edges = ref([])
-const color = ref([])
-const group = ref(['无'])
-const isSystem = ref(false)
-const sysplaceholder = ref('请选择算法')
-const productName = ref('')
-const socket = ref(null)
+const nodes: Ref<any[]> = ref([])
+const edges: Ref<any[]> = ref([])
+const color: Ref<any[]> = ref([])
+const group: Ref<string[]> = ref(['无'])
+const sysplaceholder: Ref<string> = ref('请选择算法')
+const productName: Ref<string> = ref('')
+const socket: Ref<WebSocket | null> = ref(null)
 
 onMounted(() => {
-    pictureName.value = $store.state.rectValue.pictureName
-    id.value = $store.state.rectValue.id
-    if($store.state.rectValue.isSystem !== undefined){
-        isSystem.value = $store.state.rectValue.isSystem
-    }
-    
-    console.log(pictureName.value)
-    console.log(id.value)
-    
     setImage()
     init()
 })
 
-const openExcel = () => {
-    let path = require("path")
+onActivated(() => {
+    // 从路由query参数获取数据，不再依赖store
+    pictureName.value = route.query.pictureName as string || ''
+    id.value = parseInt(route.query.id as string || '0')
+    isSystem.value = route.query.isSystem === 'true'
+    sysAndProId.value = {
+        sysId: parseInt(route.query.sysId as string || '0'),
+        proId: parseInt(route.query.proId as string || '0')
+    }
+})
 
-    let exec = require('child_process').exec
-    // exec('explorer.exe /select,"D:\\1.xls"')
-    var sysAndProId = $store.state.sysAndProId
-    var name
-    // if(sysAndProId.proId!=-1) name=`D:\\sys${sysAndProId.sysId}pro${sysAndProId.proId}.xls`;
-    if(sysAndProId.proId !== -1) name = path.resolve(__dirname,`../../../../file/${sysAndProId.sysId}pro${sysAndProId.proId}.xls`)
-    else name = path.resolve(__dirname,`../../../../file/sys${sysAndProId.sysId}.xls`)
-
-    //打包版本位置
-    //if(sysAndProId.proId!=-1) name=`resources\\AloData\\sys${sysAndProId.sysId}pro${sysAndProId.proId}.xls`;
-    //else name=`resources\\AloData\\sys${sysAndProId.sysId}.xls`;
-
-    console.log(name)
-
-    // exec('fsutil file createnew "D:\\2.xls" 0')
-    // exec('explorer "D:\\2.xls"')
-    exec(`fsutil file createnew ${name} 0`)
-    exec(`explorer ${name}`)
+const openExcel = (): void => {
+    // 由于安全限制，浏览器环境不能直接访问文件系统
+    // 这里需要通过后端API来处理文件操作
+    const fileInfo = {
+        sysId: sysAndProId.value.sysId,
+        proId: sysAndProId.value.proId
+    }
+    
+    ElMessage.info('文件操作需要通过后端处理')
+    console.log('Excel文件信息:', fileInfo)
+    
+    // 可以发送请求给后端来处理Excel文件
+    // send('openExcel')
+    // send(JSON.stringify(fileInfo))
 }
 
-const changeNodeValue = () => {
+const changeNodeValue = (): void => {
     changeNodeVisible.value = false
-    for(var i=0; i<nodes.value.length; i++){
+    for(let i = 0; i < nodes.value.length; i++){
         if(nodes.value[i].recId === changeNodeId.value){
             nodes.value[i].R = "R:" + aloForm.value.R
             nodes.value[i].DR = "DR:" + aloForm.value.DR
@@ -215,7 +249,7 @@ const changeNodeValue = () => {
     aloForm.value.Z = ''
 }
 
-const makeButton = (text, action, visiblePredicate) => {
+const makeButton = (text: string, action: (e: any, obj: any) => void, visiblePredicate?: (o: any, e: any) => boolean): any => {
     return $("ContextMenuButton",
         $(go.TextBlock, text),
         { click: action },
@@ -223,15 +257,17 @@ const makeButton = (text, action, visiblePredicate) => {
         visiblePredicate ? new go.Binding("visible", "", (o, e) => o.diagram ? visiblePredicate(o, e) : false).ofObject() : {});
 }
 
-const init = () => {
+const init = (): void => {
     // 实例化socket
-    socket.value = globalWebSocket.ws
-    // 监听socket连接
-    socket.value.onopen = open
-    // 监听socket错误信息
-    socket.value.onerror = error
-    // 监听socket消息
-    socket.value.onmessage = getAlo
+    socket.value = globalWebSocket.ws as WebSocket
+    if (socket.value) {
+        // 监听socket连接
+        socket.value.onopen = open
+        // 监听socket错误信息
+        socket.value.onerror = error
+        // 监听socket消息
+        socket.value.onmessage = getAlo
+    }
     
     if(isSystem.value){
         send("systemAll")
@@ -241,8 +277,8 @@ const init = () => {
     }
 }
 
-const setImage = () => {
-    var $ = go.GraphObject.make;  // for conciseness in defining templates
+const setImage = (): void => {
+    const $ = go.GraphObject.make;  // for conciseness in defining templates
 
     diagram.value = $(go.Diagram, "myDiagramDiv",  // create a Diagram for the DIV HTML element
     {
@@ -255,28 +291,31 @@ const setImage = () => {
         (e, obj) => e.diagram.commandHandler.deleteSelection(),
         o => o.diagram.commandHandler.canDeleteSelection()),
         makeButton(isSystem.value?"跳转产品":"跳转算法",(e, obj) =>{
-            var contextmenu = obj.part;  // the Button is in the context menu Adornment
-            var part = contextmenu.adornedPart;
-            var node = part.data;
+            const contextmenu = obj.part;  // the Button is in the context menu Adornment
+            const part = contextmenu.adornedPart;
+            const node = part.data;
 
             //系统框图和产品框图
             if(isSystem.value){
                 router.push("/seeRect")
             }
             else{
-                $store.state.aloId = node.id;
-                $store.state.aloValue = undefined;
-                $store.state.recId = node.recId;
-                $store.state.isTurnAlo = true;
+                // 设置当前算法数据而不是使用store
+                currentAloData.value = {
+                    aloId: node.id,
+                    aloValue: undefined,
+                    recId: node.recId,
+                    isTurnAlo: true
+                }
                 router.push({
                     path: `alg`,
                 })
             }
         }),
         makeButton("修改取值",(e, obj) =>{
-            var contextmenu = obj.part;  // the Button is in the context menu Adornment
-            var part = contextmenu.adornedPart;
-            var node = part.data;
+            const contextmenu = obj.part;  // the Button is in the context menu Adornment
+            const part = contextmenu.adornedPart;
+            const node = part.data;
             changeNodeId.value = node.recId;
             changeNodeVisible.value = true;
         }),
@@ -404,32 +443,32 @@ const setImage = () => {
         )
 }
 
-const drawLink = (e, button) => {
+const drawLink = (e: any, button: any): void => {
     console.log(button)
-    var node = button.part.adornedPart;
+    const node = button.part.adornedPart;
     console.log(node);
-    var tool = e.diagram.toolManager.linkingTool;
+    const tool = e.diagram.toolManager.linkingTool;
     tool.startObject = node.port;
     e.diagram.currentTool = tool;
     tool.doActivate();
 }
 
-const addRect = () => {
+const addRect = (): void => {
    console.log(value.value)
    console.log(diagramModel.value)
    recId.value++;
-    var name;
-    for (var i=0; i<alo.value.length; i++) {
+    let name: string;
+    for (let i = 0; i < alo.value.length; i++) {
         if(alo.value[i].id === value.value){
             console.log(alo.value[i]);
             name = alo.value[i].name;
         }
     }
 
-    var stroke;
+    let stroke: string | null;
     
-    var group_key;
-    for(var i=0; i<nodes.value.length; i++){
+    let group_key: any;
+    for(let i = 0; i < nodes.value.length; i++){
         if(nodes.value[i].isGroup && nodes.value[i].name === valueGroup.value){
             group_key = nodes.value[i].key;
         }
@@ -445,20 +484,20 @@ const addRect = () => {
     valueGroup.value = "";
 }
 
-const addCircle = () => {
+const addCircle = (): void => {
     recId.value++
     diagramModel.value.addNodeData({name:recId.value,recId: recId.value,key:recId.value,figure:"circle",color:"#fff",width:20,textwidth:10,height:20});
 }
 
-const addGroup = () => {
-    var stroke;
-    var cold = false, hot = false;
-    if(edgeValue.value === 1) stroke = null;
-    else if(edgeValue.value === 2){
+const addGroup = (): void => {
+    let stroke: string | null;
+    let cold: boolean = false, hot: boolean = false;
+    if(edgeValue.value === '1') stroke = null;
+    else if(edgeValue.value === '2'){
         stroke = "red";
         cold = true;
     } 
-    else if(edgeValue.value === 3){
+    else if(edgeValue.value === '3'){
         stroke = "blue";
         hot = true;
     } 
@@ -469,8 +508,8 @@ const addGroup = () => {
     recId.value++;
 }
 
-const addLine = () => {
-    var color;
+const addLine = (): void => {
+    let color: string;
     if(edgeValue.value) color = "red";
     else color = "blue";
     diagramModel.value.addLinkData({ from:addLineFrom.value, to:addLineTo.value,color:"black" })
@@ -478,7 +517,7 @@ const addLine = () => {
     addLineTo.value = "";
 }
 
-const submit = () => {
+const submit = (): void => {
     send("updateGraph");
     send(JSON.stringify({
         id:id.value,
@@ -487,24 +526,24 @@ const submit = () => {
     }));
 }
 
-const open = () => {
+const open = (): void => {
     console.log("socket连接成功");
 }
 
-const error = () => {
+const error = (): void => {
     console.log("连接错误");
 }
 
-const send = (ms) => {
+const send = (ms: string): void => {
     socket.value.send(ms);
 }
 
-const close = () => {
+const close = (): void => {
     send("close");
     console.log("socket已经关闭")
 }
 
-const getMessage = (msg) => {
+const getMessage = (msg: MessageEvent): void => {
    console.log(msg.data);
    if(msg.data === "update success"){
         ElMessage({
@@ -519,24 +558,24 @@ const getMessage = (msg) => {
        edges.value = []
    }
    else{
-        var json = eval("("+msg.data+")");
-        console.log(json)
-        nodes.value = json.nodeDataArray;
-        edges.value = json.linkDataArray;
-        console.log(nodes.value);
-        console.log(edges.value);
-   }
-
-   for(var i=0; i<nodes.value.length; i++){
+        try {
+            const json = JSON.parse(msg.data);
+            console.log(json)
+            nodes.value = json.nodeDataArray;
+            edges.value = json.linkDataArray;
+            console.log(nodes.value);
+            console.log(edges.value);
+            
+            for(let i = 0; i < nodes.value.length; i++){
     if(nodes.value[i].recId >= recId.value) recId.value = nodes.value[i].recId + 1;
 
-    if(nodes.value[i].id === $store.state.aloId){
-
-        if($store.state.aloValue !== undefined){
-            nodes.value[i].R = "R:" + $store.state.aloValue.R;
-            nodes.value[i].DR = "DR:" + $store.state.aloValue.DR;
-            nodes.value[i].H = "H:" + $store.state.aloValue.H;
-            nodes.value[i].Z = "Z:" + $store.state.aloValue.Z;
+    // 检查当前算法数据，不再使用store缓存
+    if(nodes.value[i].id === currentAloData.value.aloId){
+        if(currentAloData.value.aloValue !== undefined){
+            nodes.value[i].R = "R:" + currentAloData.value.aloValue.R;
+            nodes.value[i].DR = "DR:" + currentAloData.value.aloValue.DR;
+            nodes.value[i].H = "H:" + currentAloData.value.aloValue.H;
+            nodes.value[i].Z = "Z:" + currentAloData.value.aloValue.Z;
         }
         else{
             nodes.value[i].R = "R:0";
@@ -545,14 +584,14 @@ const getMessage = (msg) => {
             nodes.value[i].Z = "Z:0";
         }
 
-        if($store.state.aloValue !== undefined && nodes.value[i].name.indexOf("\n\n") === -1 && !isSystem.value){
-            nodes.value[i].name = nodes.value[i].name + "\n\n可靠度:" + $store.state.aloValue.R;
+        if(currentAloData.value.aloValue !== undefined && nodes.value[i].name.indexOf("\n\n") === -1 && !isSystem.value){
+            nodes.value[i].name = nodes.value[i].name + "\n\n可靠度:" + currentAloData.value.aloValue.R;
         }
         
     }
 
     if(isSystem.value){
-        for(var j=0; j<alo.value.length; j++){
+        for(let j = 0; j < alo.value.length; j++){
             if(parseInt(nodes.value[i].name)) continue;
             if(nodes.value[i].name.startsWith(alo.value[j].name) && nodes.value[i].name.indexOf("\n\n") === -1){
                 nodes.value[i].name = nodes.value[i].name + "\n\n可靠度:" + alo.value[j].R;
@@ -561,24 +600,38 @@ const getMessage = (msg) => {
         }        
     }
    }
+        } catch (e) {
+            console.error('解析JSON失败:', e);
+            return;
+        }
+   }
 
-   //   清除保存记录
-   $store.commit("changeAloValue",undefined);
+   //   清除当前算法数据记录
+   currentAloData.value.aloValue = undefined;
 
    diagramModel.value = new go.GraphLinksModel(nodes.value, edges.value);
    diagram.value.model = diagramModel.value;
 }
 
-const getSystem = (msg) => {
-    var json = eval(msg.data);
+const getSystem = (msg: MessageEvent): void => {
+    try {
+        const json = JSON.parse(msg.data);
+    } catch (e) {
+        console.error('解析JSON失败:', e);
+        return;
+    }
 }
 
-const getAlo = (msg) => {
-   var json = eval(msg.data);
+const getAlo = (msg: MessageEvent): void => {
+   try {
+       const json = JSON.parse(msg.data);
+   } catch (e) {
+       console.error('解析JSON失败:', e);
+       return;
+   }
    console.log(json);
    if(isSystem.value){
-        var sysAndProId = $store.state.sysAndProId;
-        alo.value = json[sysAndProId.sysId-1].pro;
+        alo.value = json[sysAndProId.value.sysId-1].pro;
         sysplaceholder.value = "请选择产品"
    }
    else{
@@ -586,19 +639,23 @@ const getAlo = (msg) => {
    }
    console.log(alo.value);
 
-   socket.value.onmessage = getMessage;
+   if (socket.value) {
+       socket.value.onmessage = getMessage;
+   }
    send("checkGraph");
    send(id.value);
 }
 
-const count = () => {
+const count = (): void => {
     send("calR");
     send(JSON.stringify(id.value));
 
-    socket.value.onmessage = getValue;
+    if (socket.value) {
+        socket.value.onmessage = getValue;
+    }
 }
 
-const setValue = (i) => {
+const setValue = (i: number): void => {
     nodeData.value.R = nodes.value[i].R;
     nodeData.value.DR = nodes.value[i].DR;
     nodeData.value.H = nodes.value[i].H;
@@ -613,9 +670,9 @@ const setValue = (i) => {
     message.value = JSON.parse(JSON.stringify(message.value));
 }
 
-const deepSearch = (x) => {
-    var k = -1;
-    for(var i=0; i<nodes.value.length; i++){
+const deepSearch = (x: number): void => {
+    let k: number = -1;
+    for(let i = 0; i < nodes.value.length; i++){
         if(rec.value[x][i] === 1){
             setValue(i);
             k = i;
@@ -627,10 +684,15 @@ const deepSearch = (x) => {
     }
 }
 
-const getValue = (msg) => {
+const getValue = (msg: MessageEvent): void => {
     //只返回R值
     console.log(msg.data);
-    var json = eval("("+msg.data+")");
+    try {
+        const json = JSON.parse(msg.data);
+    } catch (e) {
+        console.error('解析JSON失败:', e);
+        return;
+    }
                    
     console.log(json);
 
@@ -639,27 +701,29 @@ const getValue = (msg) => {
     
     dialogVisible.value = true;
     
-    var sysAndProId = $store.state.sysAndProId;
-    
     send("updateProduct");
-    var data = {
-        id:id.value,
-        sysId:sysAndProId.sysId,
-        proId:sysAndProId.proId,
-        R:json,
-        DR:0,
-        H:0,
-        Z:0,
+    const data = {
+        id: id.value,
+        sysId: sysAndProId.value.sysId,
+        proId: sysAndProId.value.proId,
+        R: json,
+        DR: 0,
+        H: 0,
+        Z: 0,
     }
     send(JSON.stringify(data));
     console.log(data);
 
-    socket.value.onmessage = updateProduct;
+    if (socket.value) {
+        socket.value.onmessage = updateProduct;
+    }
 }
 
-const updateProduct = (msg) => {
+const updateProduct = (msg: MessageEvent): void => {
     console.log(msg.data);
-    socket.value.onmessage = getMessage;
+    if (socket.value) {
+       socket.value.onmessage = getMessage;
+   }
 }
 </script>
 

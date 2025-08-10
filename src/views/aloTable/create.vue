@@ -11,22 +11,34 @@
             <!-- 操作栏 -->
             <div class="action-bar">
                 <div class="action-group">
-                    <el-button type="primary" :icon="Plus" @click="addVariable"
+                    <el-button type="primary" @click="addVariable"
                         :disabled="form.inputs.length >= maxVariables" class="action-btn">
+                        <el-icon>
+                            <Plus />
+                        </el-icon>
                         新增变量
                     </el-button>
-                    <el-button type="warning" :icon="Minus" @click="deleteVariable" :disabled="form.inputs.length <= 1"
+                    <el-button type="warning" @click="deleteVariable" :disabled="form.inputs.length <= 1"
                         class="action-btn">
+                        <el-icon>
+                            <Minus />
+                        </el-icon>
                         删除变量
                     </el-button>
                 </div>
 
                 <div class="submit-group">
-                    <el-button @click="resetForm" :icon="RefreshLeft" class="action-btn reset-btn">
+                    <el-button @click="resetForm" class="action-btn reset-btn">
+                        <el-icon>
+                            <RefreshLeft />
+                        </el-icon>
                         重置表单
                     </el-button>
                     <el-button type="primary" @click="onSubmit" :loading="isSubmitting" :disabled="!canSubmit"
-                        :icon="Check" size="large" class="submit-btn">
+                        size="large" class="submit-btn">
+                        <el-icon>
+                            <Check />
+                        </el-icon>
                         {{ isSubmitting ? '创建中...' : '创建算法' }}
                     </el-button>
                 </div>
@@ -154,15 +166,6 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElNotification } from 'element-plus'
 import { useRouter } from 'vue-router'
-import {
-    Plus,
-    Minus,
-    Check,
-    RefreshLeft,
-    Setting,
-    EditPen,
-    DocumentCopy
-} from '@element-plus/icons-vue'
 import { useWebSocket } from '@/composables/useWebSocket'
 
 const router = useRouter()
@@ -224,11 +227,11 @@ const rules = reactive({
     ],
     context: [
         { required: true, message: '请输入算法内容', trigger: 'blur' },
-        { min: 10, message: '算法内容不能少于10个字符', trigger: 'blur' }
+        { min: 1, message: '算法内容不能少于1个字符', trigger: 'blur' }
     ],
     description: [
         { required: true, message: '请输入算法描述', trigger: 'blur' },
-        { min: 5, max: 500, message: '描述长度在5到500个字符', trigger: 'blur' }
+        { min: 3, max: 500, message: '描述长度在3到500个字符', trigger: 'blur' }
     ],
     output: [
         { required: true, message: '请输入结果变量', trigger: 'blur' }
@@ -254,7 +257,6 @@ const formRef = ref()
 
 // 状态管理
 const isSubmitting = ref(false)
-const isLoading = ref(false)
 
 // 计算属性
 const canSubmit = computed(() => {
@@ -263,7 +265,7 @@ const canSubmit = computed(() => {
 })
 
 const hasValidInputs = computed(() => {
-    return form.inputs.every(input =>
+    return form.inputs.every((input: FormInput) =>
         input.name.trim() && input.valueType && input.type
     )
 })
@@ -370,31 +372,31 @@ const onSubmit = async () => {
         const algorithm = {
             name: form.name.trim(),
             path: '',
-            input: JSON.stringify(form.inputs.map(input => ({
+            inputs: form.inputs.map((input: FormInput) => ({
                 name: input.name.trim(),
                 value: input.value || '0',
                 type: String(input.type),
                 valueType: input.valueType,
                 dimension: input.type === 2 ? Math.max(1, input.dimension) : 0
-            }))),
+            })),
             output: form.output
-                ? form.output.split(',').map(item => item.trim()).filter(Boolean).join(',')
+                ? form.output.split(',').map((item: string) => item.trim()).filter(Boolean).join(',')
                 : '',
             formula: form.context.trim(),
             describe: form.description.trim()
         }
 
-        console.log('准备提交算法:', algorithm)
-
         // 发送创建请求
         if (sendCommand('createAlo', algorithm)) {
-            ElMessage.info('正在创建算法，请稍候...')
+            // ElMessage.info('正在创建算法，请稍候...')
+            ElMessage.success('成功提交算法')
         } else {
             throw new Error('网络连接异常')
         }
     } catch (error) {
         console.error('提交算法失败:', error)
         ElMessage.error('提交失败，请重试')
+    } finally {
         isSubmitting.value = false
     }
 }

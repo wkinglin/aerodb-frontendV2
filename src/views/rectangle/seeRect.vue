@@ -111,7 +111,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
     Plus,
@@ -122,7 +122,6 @@ import {
     Calendar,
     ChatLineSquare
 } from '@element-plus/icons-vue'
-import { useMainStore } from '@/store'
 import globalWebSocket from '@/global'
 
 // 接口定义
@@ -172,10 +171,10 @@ const rules = reactive({
 
 // 获取实例
 const router = useRouter()
-const store = useMainStore()
 const formRef = ref()
 const editFormRef = ref()
 const socket = ref<WebSocket | null>(null)
+const route = useRoute()
 
 // 生命周期
 onMounted(() => {
@@ -280,30 +279,15 @@ const seePicture = (index: number) => {
         return
     }
 
-    // 设置系统和产品ID
-    const sysAndProId = {
-        sysId: item.sysId,
-        proId: item.proId
-    }
-    store.changeSysAndProId(sysAndProId)
-
-    // 判断是否为系统级别
-    const isSystem = item.proId === -1
-
-    // 设置矩形图表值
-    const rectValue = {
-        pictureName: item.name,
-        id: item.id,
-        isSystem: isSystem
-    }
-    store.changeRectValue(rectValue)
-
-    // 路由跳转
+    // 路由跳转，通过query参数传递数据
     router.push({
-        name: '查看框图',
-        params: {
-            name: item.name,
-            id: item.id.toString()
+        path: '/rectangle',
+        query: {
+            pictureName: item.name,
+            id: item.id.toString(),
+            isSystem: (item.proId === -1).toString(),
+            sysId: item.sysId?.toString() || '',
+            proId: item.proId?.toString() || ''
         }
     })
 }

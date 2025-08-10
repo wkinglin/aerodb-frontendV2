@@ -81,9 +81,6 @@
         <!-- 操作按钮 -->
         <div class="action-buttons">
           <el-button type="primary" @click="executeAlgorithm" :loading="isExecuting" size="large">
-            <el-icon>
-              <Play />
-            </el-icon>
             {{ isExecuting ? '执行中...' : '运行算法' }}
           </el-button>
 
@@ -137,8 +134,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, reactive, computed, onMounted, watch, onActivated } from 'vue'
+import { useRoute, onBeforeRouteUpdate } from 'vue-router'
 import { ElMessage, ElNotification } from 'element-plus'
 import { useAlgorithmStore } from '../../store/algorithm'
 import { useWebSocket } from '@/composables/useWebSocket'
@@ -206,26 +203,19 @@ const isLoading = ref(true)
 const hasInputs = computed(() => form.input && form.input.length > 0)
 
 // 生命周期
-onMounted(() => {
+onActivated(() => {
+  console.log('onActivated')
+  console.log(route.query.id)
   initializeComponent()
 })
 
-// 监听路由变化
-watch(
-  () => route.query.id,
-  (newId) => {
-    if (newId && newId !== algorithmId.value) {
-      algorithmId.value = newId as string
-      loadAlgorithmData()
-    }
-  },
-  { immediate: true }
-)
-
 // 初始化组件
 const initializeComponent = () => {
-  setMessageHandler(handleWebSocketMessage)
+  // 修复类型转换问题，先转为 unknown 再转为 string
+  // algorithmId.value = algorithmStore.getAloId() as unknown as string
+  algorithmId.value = route.query.id as string
   loadAlgorithmData()
+  setMessageHandler(handleWebSocketMessage)
 }
 
 // 加载算法数据
@@ -246,6 +236,7 @@ const loadAlgorithmData = () => {
 
 // WebSocket消息处理
 const handleWebSocketMessage = (msg: MessageEvent) => {
+  console.log(msg.data)
   try {
     if (msg.data === "修改算法成功") {
       isUpdating.value = false
