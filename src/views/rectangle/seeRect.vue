@@ -110,7 +110,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, onActivated } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -122,7 +122,7 @@ import {
     Calendar,
     ChatLineSquare
 } from '@element-plus/icons-vue'
-import globalWebSocket from '@/global'
+import { useWebSocket } from '@/composables/useWebSocket'
 
 // 接口定义
 interface RectItem {
@@ -173,81 +173,17 @@ const rules = reactive({
 const router = useRouter()
 const formRef = ref()
 const editFormRef = ref()
-const socket = ref<WebSocket | null>(null)
-const route = useRoute()
+const { sendCommand, setMessageHandler } = useWebSocket()
 
 // 生命周期
-onMounted(() => {
-    init()
-    send('findAllGraph')
+onActivated(() => {
+    setMessageHandler(getMessage)
+    sendCommand("findAllGraph")
 })
-
-onUnmounted(() => {
-    if (socket.value) {
-        socket.value.close()
-    }
-})
-
-// WebSocket相关方法
-const init = () => {
-    socket.value = globalWebSocket.ws as WebSocket
-    if (socket.value) {
-        socket.value.onopen = open
-        socket.value.onerror = error
-        socket.value.onmessage = getMessage
-    }
-}
-
-const open = () => {
-    console.log('WebSocket连接成功')
-}
-
-const error = () => {
-    console.error('WebSocket连接错误')
-    ElMessage.error('连接失败，请检查网络')
-}
-
-const send = (ms: string) => {
-    if (socket.value && socket.value.readyState === WebSocket.OPEN) {
-        socket.value.send(ms)
-    } else {
-        ElMessage.error('连接未建立，请稍后重试')
-    }
-}
 
 // 接收WebSocket消息
 const getMessage = (msg: MessageEvent) => {
     try {
-        console.log('收到消息:', msg.data)
-
-        // 处理成功消息
-        const successMessages = {
-            'delete success': '删除成功',
-            'update success': '更新成功',
-            'add success': '创建成功'
-        }
-
-        const failMessages = {
-            'delete fail': '删除失败',
-            'update fail': '更新失败',
-            'add fail': '创建失败'
-        }
-
-        if (successMessages[msg.data as keyof typeof successMessages]) {
-            ElMessage.success(successMessages[msg.data as keyof typeof successMessages])
-            // 重新获取数据
-            setTimeout(() => {
-                send('findAllGraph')
-            }, 500)
-            return
-        }
-
-        if (failMessages[msg.data as keyof typeof failMessages]) {
-            ElMessage.error(failMessages[msg.data as keyof typeof failMessages])
-            return
-        }
-
-        // 尝试解析JSON数据
         const parsedData = JSON.parse(msg.data)
         if (Array.isArray(parsedData)) {
             rectList.value = parsedData.map(item => ({
@@ -261,10 +197,6 @@ const getMessage = (msg: MessageEvent) => {
         }
     } catch (error) {
         console.error('解析消息失败:', error)
-        // 如果不是JSON，可能是简单的字符串消息
-        if (typeof msg.data === 'string') {
-            console.log('收到字符串消息:', msg.data)
-        }
     } finally {
         creating.value = false
         updating.value = false
@@ -317,8 +249,8 @@ const deletePicture = (index: number) => {
         cancelButtonText: '取消',
         type: 'warning'
     }).then(() => {
-        send('deleteGraph')
-        send(item.id.toString())
+        sendCommand("deleteGraph")
+        sendCommand(item.id.toString())
     }).catch(() => {
         // 用户取消删除
     })
@@ -340,8 +272,8 @@ const submitCreate = async () => {
         }
 
         creating.value = true
-        send('addGraph')
-        send(JSON.stringify({
+        sendCommand("addGraph")
+        sendCommand(JSON.stringify({
             name: formData.name.trim(),
             message: formData.message.trim()
         }))
@@ -378,8 +310,8 @@ const submitEdit = async () => {
         }
 
         updating.value = true
-        send('updateGraph')
-        send(JSON.stringify({
+        sendCommand("updateGraph")
+        sendCommand(JSON.stringify({
             id: item.id,
             name: editFormData.name.trim(),
             message: editFormData.message.trim()

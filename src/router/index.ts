@@ -11,7 +11,7 @@ const Create = () => import('../views/aloTable/create.vue')
 // const FlowChart = () => import('../views/flowChart/flowChart.vue')
 const FlowChart = () => import('../views/flowChart/flowChart_old.vue')
 const UpLoad = () => import('../views/upLoad/upLoad.vue')
-const SeePicture = () => import('../views/rectangle/seeRect.vue')
+const SeeRect = () => import('../views/rectangle/seeRect.vue')
 const Rectangle = () => import('../views/rectangle/rectangle.vue')
 const CalHotAndCold = () => import('../views/calHotAndCold/cal.vue')
 const Document = () => import('../views/document/document.vue')
@@ -47,11 +47,12 @@ const routes: RouteRecordRaw[] = [
                 name: '新建数据库',
                 component: NewTable,
                 meta: {
+                    keepAlive: false,
                     title: '新建数据库'
                 }
             },
             {
-                path: '/alg',
+                path: 'alg',
                 name: '执行算法',
                 component: Alg,
                 meta: {
@@ -60,7 +61,7 @@ const routes: RouteRecordRaw[] = [
                 }
             },
             {
-                path: '/table',
+                path: 'table',
                 name: '建立数据库',
                 component: Table,
                 meta: {
@@ -69,7 +70,7 @@ const routes: RouteRecordRaw[] = [
                 }
             },
             {
-                path: '/create',
+                path: 'create',
                 name: '创建新算法',
                 component: Create,
                 meta: {
@@ -78,7 +79,7 @@ const routes: RouteRecordRaw[] = [
                 }
             },
             {
-                path: '/flowChart',
+                path: 'flowChart',
                 name: '查看产品树',
                 component: FlowChart,
                 meta: {
@@ -87,7 +88,7 @@ const routes: RouteRecordRaw[] = [
                 }
             },
             {
-                path: '/upLoad',
+                path: 'upLoad',
                 name: '上传文件',
                 component: UpLoad,
                 meta: {
@@ -96,16 +97,16 @@ const routes: RouteRecordRaw[] = [
                 }
             },
             {
-                path: '/seeRect',
+                path: 'seeRect',
                 name: '自定义框图',
-                component: SeePicture,
+                component: SeeRect,
                 meta: {
                     keepAlive: false,
                     title: '自定义框图'
                 }
             },
             {
-                path: '/rectangle',
+                path: 'rectangle',
                 name: '查看框图',
                 component: Rectangle,
                 meta: {
@@ -114,7 +115,7 @@ const routes: RouteRecordRaw[] = [
                 }
             },
             {
-                path: '/calHotAndCold',
+                path: 'calHotAndCold',
                 name: '计算冷热备份可靠度',
                 component: CalHotAndCold,
                 meta: {
@@ -123,14 +124,14 @@ const routes: RouteRecordRaw[] = [
                 }
             },
             {
-                path: '/document',
+                path: 'document',
                 name: '查看文档',
                 component: Document,
                 meta: {
                     keepAlive: true,
                     title: '查看文档'
                 }
-            }
+            },
         ]
     }
 ]
@@ -148,7 +149,7 @@ router.beforeEach((to, _from, next) => {
     } else {
         document.title = '可靠性评估软件'
     }
-    
+
     next()
 })
 

@@ -80,12 +80,12 @@
   .app-main-container {
     padding: 12px;
   }
-  
+
   .fade-page-enter-from {
     transform: translateY(20px) scale(0.99);
     filter: blur(2px);
   }
-  
+
   .fade-page-leave-to {
     transform: translateY(-10px) scale(1.01);
     filter: blur(1px);
@@ -93,13 +93,13 @@
 }
 
 /* 内容区域优化 */
-.app-main-container > * {
+.app-main-container>* {
   position: relative;
   z-index: 1;
 }
 
 /* 为内容添加柔和的进入动画 */
-.app-main-container > *:first-child {
+.app-main-container>*:first-child {
   animation: contentSlideIn 0.6s cubic-bezier(0.4, 0, 0.2, 1);
   animation-fill-mode: both;
 }
@@ -109,6 +109,7 @@
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);

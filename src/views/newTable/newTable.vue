@@ -86,6 +86,7 @@
 import { ref, reactive, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useWebSocket } from '@/composables/useWebSocket'
 import {
   Plus,
   Search,
@@ -95,7 +96,6 @@ import {
   Edit,
   Delete
 } from '@element-plus/icons-vue'
-import globalWebSocket from '@/global'
 
 // 响应式数据
 const tablenumbers = ref(0)
@@ -121,31 +121,13 @@ const rules = reactive({
 
 // 获取路由实例
 const router = useRouter()
-
-// 初始化socket
-const socket = ref<WebSocket | null>(null)
+const { sendCommand, setMessageHandler } = useWebSocket()
 
 // 组件挂载时初始化
 onActivated(() => {
-  init()
-  send("getAllUserTables")
+  setMessageHandler(getMessage)
+  sendCommand("getAllUserTables")
 })
-
-// 发送数据函数
-const send = (ms: string) => {
-  if (socket.value) {
-    socket.value.send(ms);
-  }
-}
-
-const init = () => {
-  // 实例化socket
-  socket.value = globalWebSocket.ws as WebSocket;
-  // 监听socket消息
-  if (socket.value) {
-    socket.value.onmessage = getMessage
-  }
-}
 
 //接收数据
 const getMessage = (msg: any) => {
@@ -153,14 +135,14 @@ const getMessage = (msg: any) => {
     // 安全解析JSON数据，避免使用eval
     const data = JSON.parse(msg.data)
     const arr = Array.isArray(data) ? data : []
-    
+
     // 直接设置tableData，不使用store缓存
     const newTableData = arr.map((name: string, index: number) => ({
       id: `table_${Date.now()}_${index}_${Math.random().toString(36).substring(2, 11)}`,
       name: name,
       valid: false
     }))
-    
+
     tableData.value = newTableData
     originalTableData.value = [...newTableData] // 保存原始数据用于搜索
   } catch (error) {
@@ -202,7 +184,7 @@ const changeTablesName = (idx: number) => {
     ElMessage.error('表格不存在')
     return
   }
-  
+
   dialogVisible.value = true
   index.value = idx
   formData.name = table.name
@@ -229,13 +211,13 @@ const onSubmitName = () => {
         return
       }
 
-      send("changeTableName")
+      sendCommand("changeTableName")
       const payload = {
         oldname: currentTable.name,
         newname: formData.name,
       }
-      send(JSON.stringify(payload))
-      
+      sendCommand(JSON.stringify(payload))
+
       // 直接更新本地数据
       currentTable.name = formData.name
 
@@ -291,8 +273,8 @@ const deleteRows = (idx: number) => {
   const UserTable = {
     name: table.name,
   }
-  send("deleteUserTable")
-  send(JSON.stringify(UserTable))
+  sendCommand("deleteUserTable")
+  sendCommand(JSON.stringify(UserTable))
 
   //执行删除操作 - 直接从本地数组删除
   tableData.value.splice(idx, 1)

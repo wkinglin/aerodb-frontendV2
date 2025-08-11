@@ -161,6 +161,7 @@ watch(() => props.isCollapsed, (newVal: boolean) => {
     opacity: 0;
     transform: translateX(-10px);
   }
+
   to {
     opacity: 1;
     transform: translateX(0);
@@ -225,8 +226,10 @@ watch(() => props.isCollapsed, (newVal: boolean) => {
   border: none;
   color: #5a6c7d;
   font-weight: 500;
-  display: flex; /* 设置为flex布局，以便在展开时对齐图标和文字 */
-  align-items: center; /* 垂直居中对齐 */
+  display: flex;
+  /* 设置为flex布局，以便在展开时对齐图标和文字 */
+  align-items: center;
+  /* 垂直居中对齐 */
 }
 
 .el-menu-item::before {
@@ -278,35 +281,41 @@ watch(() => props.isCollapsed, (newVal: boolean) => {
 
 /* --- 修改开始：折叠状态下的样式 --- */
 .el-menu--collapse .el-menu-item {
-  /* 
+  /*
     使用 Flexbox 实现完美的水平和垂直居中
     这会覆盖上面 .el-menu-item 的 align-items 设置
   */
-  justify-content: center; /* 水平居中 */
-  align-items: center;     /* 垂直居中 */
-  
+  justify-content: center;
+  /* 水平居中 */
+  align-items: center;
+  /* 垂直居中 */
+
   /* 调整折叠后的边距和内边距 */
   margin: 4px 8px;
-  padding: 0 !important; /* 清除可能存在的内边距干扰 */
+  padding: 0 !important;
+  /* 清除可能存在的内边距干扰 */
 }
 
 .el-menu--collapse .el-menu-item .el-icon {
   /* 清除展开状态下的右边距，以确保图标完全居中 */
   margin-right: 0;
-  font-size: 20px; /* 可以在这里微调图标大小 */
+  font-size: 20px;
+  /* 可以在这里微调图标大小 */
 }
 
-/* 
+/*
   当菜单折叠时，Element Plus 会用一个 tooltip 包裹内容。
   我们需要确保这个包裹容器也居中显示。
 */
 .el-menu--collapse .el-menu-item .el-tooltip__trigger {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    width: 100%; /* 确保触发器占满整个菜单项宽度 */
-    height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  /* 确保触发器占满整个菜单项宽度 */
+  height: 100%;
 }
+
 /* --- 修改结束 --- */
 
 /* 容器样式 */
@@ -352,7 +361,7 @@ div::-webkit-scrollbar-thumb:hover {
   .logo-container {
     padding: 16px 12px;
   }
-  
+
   .el-menu-item {
     height: 48px !important;
     line-height: 48px !important;
@@ -360,11 +369,11 @@ div::-webkit-scrollbar-thumb:hover {
     margin: 2px 8px;
     border-radius: 10px;
   }
-  
+
   .app-title {
     font-size: 14px;
   }
-  
+
   .app-subtitle {
     font-size: 11px;
   }
@@ -376,20 +385,44 @@ div::-webkit-scrollbar-thumb:hover {
   animation-fill-mode: both;
 }
 
-.el-menu-item:nth-child(2) { animation-delay: 0.1s; }
-.el-menu-item:nth-child(3) { animation-delay: 0.15s; }
-.el-menu-item:nth-child(4) { animation-delay: 0.2s; }
-.el-menu-item:nth-child(5) { animation-delay: 0.25s; }
-.el-menu-item:nth-child(6) { animation-delay: 0.3s; }
-.el-menu-item:nth-child(7) { animation-delay: 0.35s; }
-.el-menu-item:nth-child(8) { animation-delay: 0.4s; }
-.el-menu-item:nth-child(9) { animation-delay: 0.45s; }
+.el-menu-item:nth-child(2) {
+  animation-delay: 0.1s;
+}
+
+.el-menu-item:nth-child(3) {
+  animation-delay: 0.15s;
+}
+
+.el-menu-item:nth-child(4) {
+  animation-delay: 0.2s;
+}
+
+.el-menu-item:nth-child(5) {
+  animation-delay: 0.25s;
+}
+
+.el-menu-item:nth-child(6) {
+  animation-delay: 0.3s;
+}
+
+.el-menu-item:nth-child(7) {
+  animation-delay: 0.35s;
+}
+
+.el-menu-item:nth-child(8) {
+  animation-delay: 0.4s;
+}
+
+.el-menu-item:nth-child(9) {
+  animation-delay: 0.45s;
+}
 
 @keyframes fadeInLeft {
   from {
     opacity: 0;
     transform: translateX(-20px);
   }
+
   to {
     opacity: 1;
     transform: translateX(0);

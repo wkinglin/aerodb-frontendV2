@@ -155,8 +155,58 @@ import {
 import { ElMessage } from 'element-plus'
 import { useMainStore } from '@/store'
 import globalWebSocket from '@/global'
-import { Renderer as WebGLRenderer } from '@antv/g-webgl';
-import { Graph, register } from '@antv/g6'
+import { Graph } from '@antv/g6'
+
+// 格式化数值，超过五位小数的保留五位小数
+const formatNumber = (value: any): string => {
+  if (value == null || value === undefined || value === '') return ''
+  const num = parseFloat(value)
+  if (isNaN(num)) return value?.toString() || ''
+
+  // 检查是否有小数部分
+  if (num % 1 === 0) {
+    return num.toString()
+  }
+
+  // 检查小数位数
+  const str = num.toString()
+  const decimalIndex = str.indexOf('.')
+  if (decimalIndex !== -1 && str.length - decimalIndex - 1 > 5) {
+    return num.toFixed(5)
+  }
+
+  return str
+}
+
+// 构建描述信息
+const buildDescription = (R: any, DR: any, H: any, Z: any): string => {
+  return `R:${formatNumber(R)} DR:${formatNumber(DR)} H:${formatNumber(H)} Z:${formatNumber(Z)}`
+}
+
+// 安全解析JSON数据
+const safeParseJSON = (data: string): any => {
+  try {
+    return JSON.parse(data)
+  } catch (error) {
+    console.error('JSON解析失败:', error, 'data:', data)
+    return null
+  }
+}
+
+// 验证系统数据完整性
+const validateSystemData = (item: any): boolean => {
+  return item && typeof item === 'object' && item.name && typeof item.name === 'string'
+}
+
+// 验证产品数据完整性
+const validateProductData = (item: any): boolean => {
+  return item && typeof item === 'object' && item.name && typeof item.name === 'string'
+}
+
+// 验证算法数据完整性
+const validateAlgorithmData = (item: any): boolean => {
+  return item && typeof item === 'object' && item.name && typeof item.name === 'string'
+}
 
 // 响应式数据
 const input = ref('')
@@ -265,18 +315,26 @@ const getMessage = (msg: MessageEvent) => {
 
     if (successMessages[msg.data as keyof typeof successMessages]) {
       ElMessage.success(successMessages[msg.data as keyof typeof successMessages])
+      // 刷新数据
+      setTimeout(() => {
+        send('systemAll')
+      }, 500)
       return
     }
 
-    const parsedData = JSON.parse(msg.data)
+    const parsedData = safeParseJSON(msg.data)
+    if (!parsedData) {
+      ElMessage.error('数据格式错误')
+      return
+    }
+
     json.value = Array.isArray(parsedData) ? parsedData : []
-    console.log("json.value",json.value)
+    console.log("json.value", json.value)
 
     // 清空并重新填充系统列表
     systems.value = []
     json.value.forEach((item: any, index: number) => {
-      // 安全检查系统数据
-      if (!item || !item.name) {
+      if (!validateSystemData(item)) {
         console.warn('系统数据无效:', item)
         return
       }
@@ -308,11 +366,17 @@ const beginMove = () => {
 
 const getProducts = (msg: MessageEvent) => {
   try {
-    const data = JSON.parse(msg.data)
-    products.value = data.products || []
+    const parsedData = safeParseJSON(msg.data)
+    if (parsedData) {
+      products.value = Array.isArray(parsedData.products) ?
+        parsedData.products.filter(validateProductData) : []
+    } else {
+      products.value = []
+    }
   } catch (error) {
     console.error('获取产品数据失败:', error)
     ElMessage.error('获取产品数据失败')
+    products.value = []
   }
   if (socket.value) {
     socket.value.onmessage = getMessage
@@ -321,10 +385,11 @@ const getProducts = (msg: MessageEvent) => {
 
 const selectSys = () => {
   const targetId = deleteForm.sysId || moveForm.toSystemId
-  const system = json.value.find((item: any) => item && item.id === targetId)
+  const system = json.value.find((item: any) => validateSystemData(item) && item.id === targetId)
+
   if (system && Array.isArray(system.pro)) {
-    products.value = system.pro.filter((pro: any) => pro && pro.name) || []
-    proVisible.value = true
+    products.value = system.pro.filter(validateProductData)
+    proVisible.value = products.value.length > 0
   } else {
     products.value = []
     proVisible.value = false
@@ -341,17 +406,33 @@ const cancelDelete = () => {
 
 // 系统和产品管理方法
 const addSysOrPro = () => {
+  // 验证表单数据
+  if (!addForm.name.trim()) {
+    ElMessage.warning('请输入名称')
+    return
+  }
+
+  if (radio.value === '2' && !addForm.sysId) {
+    ElMessage.warning('请选择系统')
+    return
+  }
+
   addVisible.value = false
   let data: any
 
   if (radio.value === '1') {
     data = {
-      name: addForm.name,
-      description: addForm.description
+      name: addForm.name.trim(),
+      description: addForm.description.trim()
     }
     send('addSystem')
   } else if (radio.value === '2') {
-    data = addForm
+    data = {
+      ...addForm,
+      name: addForm.name.trim(),
+      description: addForm.description.trim(),
+      type: addForm.type.trim()
+    }
     send('addProduct')
   }
 
@@ -362,6 +443,17 @@ const addSysOrPro = () => {
 }
 
 const delSysOrPro = () => {
+  // 验证删除数据
+  if (dRadio.value === '1' && !deleteForm.sysId) {
+    ElMessage.warning('请选择要删除的系统')
+    return
+  }
+
+  if (dRadio.value === '2' && !deleteForm.proId) {
+    ElMessage.warning('请选择要删除的产品')
+    return
+  }
+
   deleteVisible.value = false
   proVisible.value = false
 
@@ -382,6 +474,17 @@ const delSysOrPro = () => {
 }
 
 const moveProduct = () => {
+  // 验证移动数据
+  if (!moveForm.proId) {
+    ElMessage.warning('请选择要操作的产品')
+    return
+  }
+
+  if (mRadio.value === '1' && !moveForm.toSystemId) {
+    ElMessage.warning('请选择目标系统')
+    return
+  }
+
   moveVisible.value = false
 
   let data: any
@@ -433,9 +536,16 @@ const search = () => {
 
 // 构建树形数据
 const buildTreeData = (systemIndex: number) => {
+  // 安全检查系统索引
+  if (systemIndex < 0 || systemIndex >= json.value.length) {
+    ElMessage.error('系统索引无效')
+    return
+  }
+
   const sys = json.value[systemIndex]
-  if (!sys || !sys.name) {
+  if (!validateSystemData(sys)) {
     console.warn('系统数据无效:', sys)
+    ElMessage.error('系统数据无效')
     return
   }
 
@@ -448,7 +558,7 @@ const buildTreeData = (systemIndex: number) => {
     id: rootId,
     data: {
       label: sys.name,
-      description: `R:${sys.R || ''} DR:${sys.DR || ''} H:${sys.H || ''} Z:${sys.Z || ''}`,
+      description: buildDescription(sys.R, sys.DR, sys.H, sys.Z),
       R: sys.R,
       DR: sys.DR,
       H: sys.H,
@@ -458,10 +568,12 @@ const buildTreeData = (systemIndex: number) => {
 
   let nodeCount = 1
 
+  // 安全检查产品数组
+  const products = Array.isArray(sys.pro) ? sys.pro : []
+
   // 构建产品节点
-  sys.pro?.forEach((pro: any) => {
-    // 安全检查产品数据
-    if (!pro || !pro.name) {
+  products.forEach((pro: any) => {
+    if (!validateProductData(pro)) {
       console.warn('产品数据无效:', pro)
       return
     }
@@ -471,7 +583,7 @@ const buildTreeData = (systemIndex: number) => {
       id: productId,
       data: {
         label: pro.name,
-        description: `R:${pro.R || ''} DR:${pro.DR || ''} H:${pro.H || ''} Z:${pro.Z || ''}`,
+        description: buildDescription(pro.R, pro.DR, pro.H, pro.Z),
         R: pro.R,
         DR: pro.DR,
         H: pro.H,
@@ -489,11 +601,13 @@ const buildTreeData = (systemIndex: number) => {
 
     nodeCount++
 
+    // 安全检查算法数组
+    const algorithms = Array.isArray(pro.alo) ? pro.alo : []
+
     // 构建算法节点
-    pro.alo?.forEach((algorithm: any) => {
-      // 安全检查算法名称
-      if (!algorithm || !algorithm.name || typeof algorithm.name !== 'string') {
-        console.warn('算法名称无效:', pro,algorithm)
+    algorithms.forEach((algorithm: any) => {
+      if (!validateAlgorithmData(algorithm)) {
+        console.warn('算法数据无效:', algorithm)
         return
       }
 
@@ -531,12 +645,11 @@ const buildTreeData = (systemIndex: number) => {
       nodeCount++
     })
 
-    if (pro.alo?.length === 0) nodeCount++
+    if (algorithms.length === 0) nodeCount++
   })
 
   // 更新图表数据
   data.value = { nodes, edges }
-
   console.log(data.value)
 
   // 重新创建图表
@@ -551,7 +664,7 @@ const buildTreeData = (systemIndex: number) => {
     graph.value.setData(data.value)
     graph.value.render()
     graph.value.fitCenter()
-    // addNodeClickHandlers()
+    addNodeClickHandlers()
   }
 }
 
@@ -585,13 +698,13 @@ const newGraph = (width: number, height: number) => {
     container: container,
     width: containerWidth,
     height: containerHeight,
-    
+
     // 数据
     data: data.value,
-    
+
     // 插件配置
     plugins: [contextMenu],
-    
+
     // 布局配置
     layout: {
       type: 'mindmap',
@@ -600,7 +713,7 @@ const newGraph = (width: number, height: number) => {
       getVGap: () => 20,
       getHGap: () => 100
     },
-    
+
     // 节点配置 - 使用最简单的rect样式
     node: {
       type: 'rect',
@@ -633,7 +746,7 @@ const newGraph = (width: number, height: number) => {
           const desc = data.description || '无';
           detailText = desc.length > 12 ? desc.substring(0, 12) + '...' : desc;
         } else {
-          detailText = `R:${data.R || 0} DR:${data.DR || 0}\nH:${data.H || 0} Z:${data.Z || 0}`;
+          detailText = `R:${formatNumber(data.R)} DR:${formatNumber(data.DR)}\nH:${formatNumber(data.H)} Z:${formatNumber(data.Z)}`;
         }
 
         // 组合显示文本
@@ -663,7 +776,7 @@ const newGraph = (width: number, height: number) => {
         }
       }
     },
-    
+
     // 边配置 - 简化
     edge: {
       type: 'line',
@@ -673,7 +786,7 @@ const newGraph = (width: number, height: number) => {
         endArrow: true,
       }
     },
-    
+
     // behaviors: [{
     //   type: 'click-select',
     //   onClick: (e: any) => {
@@ -688,38 +801,35 @@ const addNodeClickHandlers = () => {
   if (!graph.value) return
 
   graph.value.on('node:click', (e: any) => {
-    // 清除其他节点的点击状态
-    const allNodes = graph.value.getAllNodesData()
-    allNodes.forEach((nodeData: any) => {
-      graph.value.setElementState(nodeData.id, 'click', false)
-    })
-
-    // 设置当前节点的点击状态
-    const nodeId = e.target.id
-    const nodeData = graph.value.getNodeData(nodeId)
-    graph.value.setElementState(nodeId, 'click', true)
-
-    const nodeName = nodeData?.data?.label || ''
-
-    // 获取点击位置
-    const { canvasY } = e.canvas || {}
-    const nodeBox = graph.value.getNodeData(nodeId)
-    const nodeY = nodeBox?.data?.y || 0
-
-    // 判断是否点击在按钮区域（节点下半部分）
-    const isButtonClick = canvasY && nodeY && (canvasY - nodeY) > 30
-
-    console.log('节点点击:', { nodeId, nodeName, isButtonClick, canvasY, nodeY })
-
-    // 处理算法节点点击
-    if (nodeId.startsWith('alo')) {
-      const aloIdMatch = nodeId.match(/aloID(\d+)/)
-      if (aloIdMatch) {
-        jumpToAlgorithm(parseInt(aloIdMatch[1]))
+    try {
+      // 获取节点信息
+      const nodeId = e.itemId || e.target?.id
+      if (!nodeId) {
+        console.warn('无法获取节点ID')
+        return
       }
-    } else {
-      // 处理系统/产品节点点击
-      handleSystemProductClick(nodeId, nodeName)
+
+      const nodeData = graph.value.getNodeData(nodeId)
+      if (!nodeData) {
+        console.warn('无法获取节点数据')
+        return
+      }
+
+      const nodeName = nodeData?.data?.label || ''
+      console.log('节点点击:', { nodeId, nodeName })
+
+      // 处理算法节点点击
+      if (nodeId.startsWith('alo')) {
+        const aloIdMatch = nodeId.match(/aloID(\d+)/)
+        if (aloIdMatch) {
+          jumpToAlgorithm(parseInt(aloIdMatch[1]))
+        }
+      } else {
+        // 处理系统/产品节点点击
+        handleSystemProductClick(nodeId, nodeName)
+      }
+    } catch (error) {
+      console.error('节点点击处理失败:', error)
     }
   })
 }
@@ -732,39 +842,65 @@ const jumpToAlgorithm = (algoId: number) => {
 
 // 处理系统/产品节点点击
 const handleSystemProductClick = (nodeId: string, nodeName: string) => {
-  pictureName.value = nodeName
-
-  const systemIndex = parseInt(value.value.replace('选项', ''))
-  const sys = json.value[systemIndex]
-  const sysId = sys?.id
-
-  let proId = 0
-  if (nodeId.startsWith('pro')) {
-    const match = nodeId.match(/pro(\d+)/)
-    if (match) {
-      proId = parseInt(match[1])
+  try {
+    if (!value.value) {
+      ElMessage.warning('请先选择系统')
+      return
     }
-    isSystem.value = false
-  } else if (nodeId.startsWith('sys')) {
-    proId = -1
-    isSystem.value = true
-  }
 
-  sysAndProId.value = { sysId, proId }
-  store.changeSysAndProId(sysAndProId.value)
+    pictureName.value = nodeName
 
-  // 查找或创建图表
-  send('findAllGraph')
-  if (socket.value) {
-    socket.value.onmessage = getRectAll
+    const systemIndex = parseInt(value.value.replace('选项', ''))
+    if (systemIndex < 0 || systemIndex >= json.value.length) {
+      ElMessage.error('系统索引无效')
+      return
+    }
+
+    const sys = json.value[systemIndex]
+    if (!validateSystemData(sys)) {
+      ElMessage.error('系统数据无效')
+      return
+    }
+
+    const sysId = sys.id
+    let proId = 0
+
+    if (nodeId.startsWith('pro')) {
+      const match = nodeId.match(/pro(\d+)/)
+      if (match) {
+        proId = parseInt(match[1])
+      }
+      isSystem.value = false
+    } else if (nodeId.startsWith('sys')) {
+      proId = -1
+      isSystem.value = true
+    }
+
+    sysAndProId.value = { sysId, proId }
+    store.changeSysAndProId(sysAndProId.value)
+
+    // 查找或创建图表
+    send('findAllGraph')
+    if (socket.value) {
+      socket.value.onmessage = getRectAll
+    }
+  } catch (error) {
+    console.error('处理节点点击失败:', error)
+    ElMessage.error('处理节点点击失败')
   }
 }
 
 // 获取所有矩形图表
 const getRectAll = (msg: MessageEvent) => {
   try {
-    const rectData = JSON.parse(msg.data)
-    const existingRect = rectData.find((item: any) => item.name === pictureName.value)
+    const rectData = safeParseJSON(msg.data)
+    if (!Array.isArray(rectData)) {
+      console.error('图表数据格式错误')
+      ElMessage.error('图表数据格式错误')
+      return
+    }
+
+    const existingRect = rectData.find((item: any) => item && item.name === pictureName.value)
 
     if (existingRect) {
       navigateToFlow(existingRect.id)
@@ -787,6 +923,15 @@ const getRectAll = (msg: MessageEvent) => {
   } catch (error) {
     console.error('获取图表数据失败:', error)
     ElMessage.error('获取图表数据失败')
+  } finally {
+    // 确保恢复消息处理器
+    if (socket.value) {
+      setTimeout(() => {
+        if (socket.value) {
+          socket.value.onmessage = getMessage
+        }
+      }, 1000)
+    }
   }
 }
 
