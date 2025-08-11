@@ -19,7 +19,7 @@
         </div>
       </template>
 
-      <div class="control-panel">
+      <div class="control-panel-tree">
         <div class="control-left">
           <el-select v-model="selectedSystemId" placeholder="请选择系统" class="system-select" clearable>
             <el-option v-for="item in systems" :key="item.value" :label="item.label" :value="item.value"></el-option>
@@ -1044,7 +1044,7 @@ const newGraph = (a: number, b: number) => {
 }
 
 /* 控制面板样式 */
-.control-panel {
+.control-panel-tree {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1163,7 +1163,7 @@ const newGraph = (a: number, b: number) => {
     padding: 12px;
   }
 
-  .control-panel {
+  .control-panel-tree {
     flex-direction: column;
     align-items: stretch;
     gap: 16px;
@@ -1206,7 +1206,7 @@ const newGraph = (a: number, b: number) => {
 }
 
 @media (max-width: 480px) {
-  .control-panel {
+  .control-panel-tree {
     padding: 16px;
   }
 
