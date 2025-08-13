@@ -45,7 +45,7 @@
             </div>
           </div>
 
-          <el-alert title="提示" description="算法变量若为数组，请使用英文逗号隔开多个值" type="info" :closable="false" show-icon
+          <el-alert title="提示" description="算法变量若为数组，请使用中括号将值括起来，多维数组则使用多个中括号" type="info" :closable="false" show-icon
             class="input-tip" />
         </el-form>
       </el-card>
@@ -296,7 +296,7 @@ const parseAlgorithmInputs = (algorithm: any) => {
     }))
 
     // 生成输入提示文本
-    form.inputSee = form.input.map((item, index) => {
+    form.inputSee = form.input.map((item: any, index: any) => {
       const typeText = item.valueType === 'int' ? '(整数)' :
         item.valueType === 'double' ? '(实数)' : ''
       return `${index + 1}.算法变量的值 ${typeText}`
@@ -337,6 +337,8 @@ const executeAlgorithm = async () => {
       input: prepareInputData()
     }
 
+    console.log("payload", payload)
+
     if (sendCommand('exec', payload)) {
       setMessageHandler(handleExecutionResult)
       console.log('算法执行请求已发送')
@@ -369,12 +371,17 @@ const validateInputs = (): boolean => {
 
 // 准备输入数据
 const prepareInputData = () => {
-  return form.input.map(item => ({
+  return form.input.map((item: any) => {
+    console.log("item", item.value)
+    console.log("item.value", JSON.parse(item.value), typeof item.value)
+    return ({
     ...item,
+    type: Number(item.type),
     value: item.type === 2
-      ? (typeof item.value === 'string' ? item.value.split(',') : item.value)
+      ? JSON.parse(item.value)
       : item.value
-  }))
+  })
+})
 }
 
 // 处理执行结果

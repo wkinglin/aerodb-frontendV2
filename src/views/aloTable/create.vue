@@ -125,13 +125,13 @@
 
                                 <!-- 数组维度设置 -->
                                 <div v-if="input.type === 2" class="array-config">
-                                    <el-form-item label="数组元素个数">
+                                    <el-form-item label="数组维度个数">
                                         <el-input-number v-model="input.dimension" :min="1" :max="1000"
-                                            placeholder="设置数组长度" style="width: 200px" />
+                                            placeholder="设置数组维度" style="width: 200px" />
                                         <el-text type="info" style="margin-left: 12px">
                                             数组将包含 {{ input.dimension || 0 }} 个{{
                                                 input.valueType === 'int' ? '整数' : input.valueType === 'double' ? '浮点数' :
-                                                    '元素'
+                                                    '维度'
                                             }}
                                         </el-text>
                                     </el-form-item>
@@ -380,8 +380,8 @@ const onSubmit = async () => {
                 dimension: input.type === 2 ? Math.max(1, input.dimension) : 0
             })),
             output: form.output
-                ? form.output.split(',').map((item: string) => item.trim()).filter(Boolean).join(',')
-                : '',
+                ? form.output.split(',').map((item: string) => item.trim()).filter(Boolean)
+                : [],
             formula: form.context.trim(),
             describe: form.description.trim()
         }
