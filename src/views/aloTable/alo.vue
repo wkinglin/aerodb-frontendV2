@@ -101,6 +101,51 @@
       </div>
     </div>
 
+    <!-- 历史记录区域 -->
+    <div v-if="showHistory" class="history-section">
+      <el-card class="history-card" shadow="hover">
+        <template #header>
+          <div class="section-header">
+            <h3><el-icon>
+                <Clock />
+              </el-icon>执行历史</h3>
+            <el-button type="text" @click="hideHistory" class="close-history-btn">
+              <el-icon>
+                <Close />
+              </el-icon>
+            </el-button>
+          </div>
+        </template>
+
+        <el-table :data="tableData" stripe height="400" class="history-table">
+          <el-table-column prop="input" label="输入参数" min-width="200">
+            <template #default="{ row }">
+              <el-text class="input-text" truncated>{{ row.input }}</el-text>
+            </template>
+          </el-table-column>
+          <el-table-column prop="output" label="输出结果" min-width="200">
+            <template #default="{ row }">
+              <el-text class="output-text" truncated>{{ row.output }}</el-text>
+            </template>
+          </el-table-column>
+          <el-table-column prop="lastTime" label="执行时间" width="180" />
+          <el-table-column prop="success" label="状态" width="100">
+            <template #default="{ row }">
+              <el-tag :type="row.success === '成功' ? 'success' : 'danger'">
+                {{ row.success }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="reason" label="失败原因" min-width="150">
+            <template #default="{ row }">
+              <el-text v-if="row.reason" type="danger">{{ row.reason }}</el-text>
+              <span v-else>-</span>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-card>
+    </div>
+
     <!-- 历史记录抽屉 -->
     <el-drawer v-model="drawer" title="算法执行历史" :direction="direction" size="70%">
       <el-table :data="tableData" stripe height="100%" class="history-table">
@@ -134,8 +179,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch, onActivated } from 'vue'
-import { useRoute, onBeforeRouteUpdate } from 'vue-router'
+import { ref, reactive, computed, onActivated, onDeactivated } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElNotification } from 'element-plus'
 import { useAlgorithmStore } from '../../store/algorithm'
 import { useWebSocket } from '@/composables/useWebSocket'
@@ -193,6 +238,7 @@ const tableData = ref<TableDataItem[]>([])
 const drawer = ref(false)
 const direction = ref<'rtl' | 'ltr'>('rtl')
 const algorithmId = ref(route.query.id as string)
+const showHistory = ref(false) // 控制历史记录显示状态
 
 // 加载状态
 const isExecuting = ref(false)
@@ -204,9 +250,17 @@ const hasInputs = computed(() => form.input && form.input.length > 0)
 
 // 生命周期
 onActivated(() => {
-  console.log('onActivated')
-  console.log(route.query.id)
+  // 重置历史记录显示状态
+  showHistory.value = false
+  tableData.value = []
   initializeComponent()
+})
+
+onDeactivated(() => {
+  // 重置历史记录显示状态
+  showHistory.value = false
+  tableData.value = []
+  resetForm()
 })
 
 // 初始化组件
@@ -214,8 +268,11 @@ const initializeComponent = () => {
   // 修复类型转换问题，先转为 unknown 再转为 string
   // algorithmId.value = algorithmStore.getAloId() as unknown as string
   algorithmId.value = route.query.id as string
-  loadAlgorithmData()
+
+
+
   setMessageHandler(handleWebSocketMessage)
+  loadAlgorithmData()
 }
 
 // 加载算法数据
@@ -236,7 +293,6 @@ const loadAlgorithmData = () => {
 
 // WebSocket消息处理
 const handleWebSocketMessage = (msg: MessageEvent) => {
-  console.log(msg.data)
   try {
     if (msg.data === "修改算法成功") {
       isUpdating.value = false
@@ -270,7 +326,7 @@ const handleWebSocketMessage = (msg: MessageEvent) => {
 
     // 处理算法内容（移除注释）
     form.con = removeComments(algorithm.formula)
-    form.describe = algorithm.describe + "请根据提示输入变量的值"
+    form.describe = algorithm.describe + ",请根据提示输入变量的值"
 
     isLoading.value = false
     console.log('算法数据加载完成:', algorithmInfo.value)
@@ -290,8 +346,8 @@ const parseAlgorithmInputs = (algorithm: any) => {
     // 处理数组类型的值
     form.input = inputs.map((item: any) => ({
       ...item,
-      value: item.type === '2' && Array.isArray(item.value) && item.value.length > 1
-        ? item.value.join(',')
+      value: item.type === 2
+        ? JSON.stringify(item.value)
         : item.value
     }))
 
@@ -339,12 +395,9 @@ const executeAlgorithm = async () => {
 
     console.log("payload", payload)
 
-    if (sendCommand('exec', payload)) {
-      setMessageHandler(handleExecutionResult)
-      console.log('算法执行请求已发送')
-    } else {
-      throw new Error('网络连接异常')
-    }
+    setMessageHandler(handleExecutionResult)
+    sendCommand('exec', payload)
+
   } catch (error) {
     console.error('执行算法失败:', error)
     ElMessage.error('执行失败，请重试')
@@ -372,25 +425,24 @@ const validateInputs = (): boolean => {
 // 准备输入数据
 const prepareInputData = () => {
   return form.input.map((item: any) => {
-    console.log("item", item.value)
-    console.log("item.value", JSON.parse(item.value), typeof item.value)
+    console.log("item", JSON.parse(item.value), typeof item.value)
     return ({
-    ...item,
-    type: Number(item.type),
-    value: item.type === 2
-      ? JSON.parse(item.value)
-      : item.value
+      ...item,
+      type: Number(item.type),
+      value: Number(item.type) === 2
+        ? JSON.parse(item.value)
+        : item.value
+    })
   })
-})
 }
 
 // 处理执行结果
 const handleExecutionResult = (msg: MessageEvent) => {
   isExecuting.value = false
+  console.log("msg.data", msg.data)
 
   try {
-    const processedData = msg.data.replace(/\\n\\n\\n/g, ';').replace(/["\\n' ']/g, '')
-    const result = JSON.parse(processedData)
+    const result = JSON.parse(msg.data)
 
     form.output = JSON.stringify(result.result, null, 2)
 
@@ -443,12 +495,15 @@ const updateAlgorithm = async () => {
 // 打开历史记录
 const openHistory = () => {
   const id = algorithmInfo.value.id
-  if (sendCommand('findAllRecords', id.toString())) {
-    setMessageHandler(handleHistoryData)
-    drawer.value = true
-  } else {
-    ElMessage.error('无法获取历史记录')
-  }
+  console.log("id", id)
+  setMessageHandler(handleHistoryData)
+  sendCommand('findAllRecords', id)
+  showHistory.value = true // 显示历史记录区域
+}
+
+// 隐藏历史记录
+const hideHistory = () => {
+  showHistory.value = false
 }
 
 // 处理历史数据
@@ -464,7 +519,7 @@ const handleHistoryData = (msg: MessageEvent) => {
       reason: record.message || ''
     }))
 
-    console.log('历史记录加载完成:', tableData.value.length, '条')
+    console.log('历史记录加载完成:', tableData.value.length, '条', tableData.value)
   } catch (error) {
     console.error('解析历史数据失败:', error)
     ElMessage.error('历史数据格式错误')
@@ -503,8 +558,15 @@ const getVariableTypeText = (item: AlgorithmInput) => {
 
 const getInputPlaceholder = (item: AlgorithmInput) => {
   return item.type === 2
-    ? '请输入数组值，用逗号分隔 (如: 1,2,3)'
+    ? '请输入数组值，格式: [1,2,3] 或 [[1,2],[3,4]]'
     : `请输入${item.valueType === 'int' ? '整数' : '数值'}`
+}
+
+const resetForm = () => {
+  form.con = ''
+  form.describe = ''
+  form.input = []
+  form.output = ''
 }
 </script>
 
@@ -586,6 +648,8 @@ const getInputPlaceholder = (item: AlgorithmInput) => {
 .section-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  /* 让关闭按钮靠右 */
   gap: 8px;
 }
 
@@ -722,6 +786,44 @@ const getInputPlaceholder = (item: AlgorithmInput) => {
 
 .info-icon:hover {
   color: #409EFF;
+}
+
+/* 历史记录区域 */
+.history-section {
+  margin-top: 24px;
+  animation: slideDown 0.3s ease-out;
+}
+
+.history-card {
+  border-radius: 12px;
+  border: none;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+}
+
+.history-card:hover {
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.12);
+}
+
+.close-history-btn {
+  color: #909399;
+  transition: color 0.2s ease;
+}
+
+.close-history-btn:hover {
+  color: #F56C6C;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* 历史表格 */

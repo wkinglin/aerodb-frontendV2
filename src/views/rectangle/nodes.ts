@@ -25,7 +25,7 @@ export interface CustomEvents {
 // 自定义节点类型
 export type CustomNodeTypes = 'custom' | 'special' | 'algorithm' | 'system' | 'product' | 'group'
 
-export interface Node{
+export interface Node {
   // 节点id
   id: number
   // 矩形id
@@ -37,7 +37,6 @@ export interface Node{
   // 节点位置
   loc: string
 
-
   // 是否是组
   type: 'group' | 'pro' | 'alo'
   isGroup: boolean
@@ -45,7 +44,7 @@ export interface Node{
   group: number
   // 冷热备份度
   groupType: GroupType
-  isHot: boolean
+  hot: boolean
 
   // 属性值
   R: string
@@ -55,6 +54,10 @@ export interface Node{
 
   // 置信度
   reliability: string
+
+  // 组节点尺寸（可选，仅用于组节点）
+  width?: number
+  height?: number
 }
 
 export interface Edge {
@@ -66,6 +69,10 @@ export interface Edge {
 export interface Alo {
   id: number
   name: string
+  R: string
+  DR: string
+  H: string
+  Z: string
 }
 
 export interface Pro {

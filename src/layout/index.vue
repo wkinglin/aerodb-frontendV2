@@ -42,7 +42,7 @@ const toggleSidebar = () => {
     left: 0;
     right: 0;
     bottom: 0;
-    background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.05) 0%, transparent 70%);
+    background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.05) 0%, transparent 70%);
     pointer-events: none;
 }
 
@@ -85,7 +85,7 @@ const toggleSidebar = () => {
 .header {
     height: 70px;
     width: 100%;
-    background: linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 100%);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.7) 100%);
     backdrop-filter: blur(20px);
     box-shadow: 0 2px 20px rgba(0, 0, 0, 0.08);
     z-index: 99;
@@ -120,7 +120,7 @@ const toggleSidebar = () => {
     left: 0;
     right: 0;
     bottom: 0;
-    background-image: 
+    background-image:
         radial-gradient(circle at 20% 80%, rgba(102, 126, 234, 0.03) 0%, transparent 50%),
         radial-gradient(circle at 80% 20%, rgba(118, 75, 162, 0.03) 0%, transparent 50%);
     pointer-events: none;
@@ -153,12 +153,12 @@ const toggleSidebar = () => {
         margin: 4px 4px 4px 0;
         border-radius: 12px;
     }
-    
+
     .header {
         height: 64px;
         border-radius: 12px 12px 0 0;
     }
-    
+
     .main-content {
         padding: 16px;
         border-radius: 0 0 12px 12px;
@@ -169,13 +169,13 @@ const toggleSidebar = () => {
     .app-container {
         flex-direction: column;
     }
-    
+
     .sidebar {
         height: auto;
         order: 2;
         box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.1);
     }
-    
+
     .main-container {
         order: 1;
         margin: 4px;

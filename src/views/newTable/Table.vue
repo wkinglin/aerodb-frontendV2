@@ -119,6 +119,7 @@ import 'handsontable/dist/languages/zh-CN.js'
 
 // 表单验证函数
 const validatePass = (rule: any, value: any, callback: any) => {
+  console.log(rule, value, callback)
   const num = /^[a-zA-Z]/
   if (!num.test(value)) {
     return callback(new Error('不能以数字开头'))
@@ -184,6 +185,7 @@ const hotSettings = reactive({
   manualRowResize: true,
   wordWrap: true,
   cells: function (row: number, col: number) {
+    console.log(row, col)
     const cellProperties: any = {
       readOnly: false,
       className: 'custom-cell',
@@ -241,14 +243,14 @@ const init = () => {
   // 从路由获取表格ID和名称
   const tableId = route.query.table_id as string
   const tableName = route.query.table_name as string
-  
+
   if (!tableId) {
     ElMessage.error('表格ID不能为空')
     return
   }
 
   currentTableId.value = tableId
-  
+
   // 初始化当前表格数据
   currentTableData.value = {
     id: tableId,
@@ -447,7 +449,7 @@ const onSubmit = () => {
       currentTableData.value.headersType = [...form.colHeadersType]
       currentTableData.value.colnum = parseInt(form.columnNumbers)
       currentTableData.value.rownum = parseInt(form.rowNumbers)
-      
+
       getColHeaders()
       dialogVisible.value = false
 
@@ -508,7 +510,7 @@ const save = () => {
 
     // 设置消息处理 - 检查保存前的状态
     const wasNewTable = currentTableData.value.valid === true
-    
+
     // 更新表格状态
     currentTableData.value.valid = false
 

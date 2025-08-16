@@ -11,9 +11,9 @@
           </div>
           <div class="header-actions">
             <el-button-group>
-              <el-button type="primary" :icon="Plus" @click="addVisible = true">添加</el-button>
+              <el-button type="primary" :icon="Plus" @click="openAddDialog()">添加</el-button>
               <el-button type="danger" :icon="Delete" @click="deleteVisible = true">删除</el-button>
-              <el-button type="warning" :icon="Operation" @click="beginMove()">移动</el-button>
+              <!-- <el-button type="warning" :icon="Operation" @click="beginMove()">移动</el-button> -->
             </el-button-group>
           </div>
         </div>
@@ -45,13 +45,14 @@
     </el-card>
 
 
-    <!-- 添加系统或产品对话框 -->
-    <el-dialog title="添加系统或产品模块" v-model="addVisible" width="500px" center>
+    <!-- 添加系统、产品或算法对话框 -->
+    <el-dialog title="添加系统、产品或算法模块" v-model="addVisible" width="500px" center>
       <el-form label-width="150px" label-position="left" :model="addForm">
         <el-form-item label="选择添加的模块">
           <el-radio-group v-model="radio">
             <el-radio label="1">添加系统</el-radio>
             <el-radio label="2">添加产品</el-radio>
+            <el-radio label="3">添加算法</el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item v-if="radio === '2'" label="添加到哪一个系统中">
@@ -62,11 +63,33 @@
         <el-form-item v-if="radio === '2'" label="产品类型">
           <el-input v-model="addForm.type" placeholder="请输入产品类型" clearable></el-input>
         </el-form-item>
-        <el-form-item label="系统或产品名称">
-          <el-input v-model="addForm.name" placeholder="请输入名称" clearable></el-input>
+
+        <!-- 算法相关字段 -->
+        <el-form-item v-if="radio === '3'" label="关联系统">
+          <el-select v-model="addForm.sysId" placeholder="请选择系统" @change="onSystemChange" style="width: 100%">
+            <el-option v-for="item in systems" :key="item.id" :label="item.label" :value="item.id"></el-option>
+          </el-select>
         </el-form-item>
-        <el-form-item label="系统或产品描述">
-          <el-input type="textarea" v-model="addForm.description" :rows="4" placeholder="请输入描述"></el-input>
+        <el-form-item v-if="radio === '3' && addForm.sysId" label="关联产品">
+          <el-select v-model="addForm.proId" placeholder="请选择产品" style="width: 100%">
+            <el-option v-for="item in availableProducts" :key="item.id" :label="item.name" :value="item.id"></el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="radio === '3'" label="选择算法">
+          <el-select v-model="addForm.algorithmId" placeholder="请选择算法" style="width: 100%">
+            <el-option v-for="item in algorithms" :key="item.id" :label="item.name" :value="item.id"></el-option>
+          </el-select>
+        </el-form-item>
+
+        <el-form-item v-if="radio === '1' || radio === '2'"
+          :label="radio === '1' ? '系统名称' : radio === '2' ? '产品名称' : '算法名称'">
+          <el-input v-model="addForm.name"
+            :placeholder="radio === '1' ? '请输入系统名称' : radio === '2' ? '请输入产品名称' : '请输入算法名称'" clearable></el-input>
+        </el-form-item>
+        <el-form-item v-if="radio === '1' || radio === '2'"
+          :label="radio === '1' ? '系统描述' : radio === '2' ? '产品描述' : '算法描述'">
+          <el-input type="textarea" v-model="addForm.description" :rows="4"
+            :placeholder="radio === '1' ? '请输入系统描述' : radio === '2' ? '请输入产品描述' : '请输入算法描述'"></el-input>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -78,13 +101,14 @@
     </el-dialog>
 
 
-    <!-- 删除系统或产品对话框 -->
-    <el-dialog title="删除系统或产品模块" v-model="deleteVisible" width="500px" center>
+    <!-- 删除系统、产品或算法对话框 -->
+    <el-dialog title="删除系统、产品或算法模块" v-model="deleteVisible" width="500px" center>
       <el-form label-width="150px" label-position="left" :model="deleteForm">
         <el-form-item label="选择删除的模块">
           <el-radio-group v-model="dRadio">
             <el-radio label="1">删除系统</el-radio>
             <el-radio label="2">删除产品</el-radio>
+            <el-radio label="3">删除算法</el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item v-if="dRadio === '1'" label="删除哪一个系统">
@@ -99,6 +123,19 @@
           </el-select>
           <el-select v-if="proVisible" v-model="deleteForm.proId" placeholder="请选择产品" style="width: 100%">
             <el-option v-for="item in products" :key="item.id" :label="item.name" :value="item.id"></el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="dRadio === '3'" label="删除哪一个算法">
+          <el-select v-model="deleteForm.sysId" placeholder="请选择系统" @change="selectSys()"
+            style="width: 100%; margin-bottom: 12px">
+            <el-option v-for="item in systems" :key="item.id" :label="item.label" :value="item.id"></el-option>
+          </el-select>
+          <el-select v-if="proVisible" v-model="deleteForm.proId" placeholder="请选择产品" @change="selectPro()"
+            style="width: 100%; margin-bottom: 12px">
+            <el-option v-for="item in products" :key="item.id" :label="item.name" :value="item.id"></el-option>
+          </el-select>
+          <el-select v-if="aloVisible" v-model="deleteForm.algorithmId" placeholder="请选择算法" style="width: 100%">
+            <el-option v-for="item in algorithms" :key="item.id" :label="item.name" :value="item.id"></el-option>
           </el-select>
         </el-form-item>
       </el-form>
@@ -148,43 +185,56 @@
 
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted, onActivated } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, onActivated, onDeactivated } from 'vue'
 import { useRouter } from 'vue-router'
+import { useWebSocket } from '@/composables/useWebSocket'
 import {
   Plus,
   Delete,
-  Setting as Operation,
   Search,
   Grid
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { useMainStore } from '@/store'
-import globalWebSocket from '@/global'
 import G6 from '@antv/g6'
 
 // 响应式数据
 const input = ref('')
+
+// 图表数据
 const graph = ref<any>(null)
-const data = ref<any>([])
+const treeData = ref<any>([])
+
+// 系统、产品、算法数据
 const json = ref<any[]>([])
 const systems = ref<any[]>([])
 const products = ref<any[]>([])
+const algorithms = ref<any[]>([])
+const availableProducts = ref<any[]>([])
 const selectedSystemId = ref('')
-const addVisible = ref(false)
-const deleteVisible = ref(false)
-const proVisible = ref(false)
-const moveVisible = ref(false)
-const radio = ref('1')
-const dRadio = ref('1')
-const mRadio = ref('1')
+
+
+// 节点数据
 const pictureName = ref('')
 const isSystem = ref(false)
 const sysAndProId = ref<any>({})
 const recId = ref(0)
 
 // 表单数据
+const addVisible = ref(false)
+const deleteVisible = ref(false)
+const proVisible = ref(false)
+const aloVisible = ref(false)
+const moveVisible = ref(false)
+
+const radio = ref('1')
+const dRadio = ref('1')
+const mRadio = ref('1')
+
+// 表单数据
 const addForm = reactive({
   sysId: '',
+  proId: '',
+  algorithmId: '',
   name: '',
   type: '',
   description: ''
@@ -192,7 +242,8 @@ const addForm = reactive({
 
 const deleteForm = reactive({
   sysId: '',
-  proId: ''
+  proId: '',
+  algorithmId: ''
 })
 
 const moveForm = reactive({
@@ -200,34 +251,43 @@ const moveForm = reactive({
   toSystemId: ''
 })
 
-// 获取路由和store实例
+// 获取路由实例
 const router = useRouter()
-const store = useMainStore()
-const socket = ref<WebSocket | null>(null)
+const { sendCommand, setMessageHandler, clearMessageHandler } = useWebSocket()
 
 // 生命周期钩子
 onMounted(() => {
-  newGraph(1200, 550)
-  if (graph.value) {
-    graph.value.fitCenter()
-    graph.value.fitView(10)
-  }
-  init()
-  send('systemAll')
+
 })
 
 onActivated(() => {
-  init()
-  send('systemAll')
+  selectedSystemId.value = ''
+  if (graph.value) {
+    graph.value.destroy()
+  }
+
+  // 重新设置当前页面的消息处理器，确保覆盖其他页面的处理器
+  setMessageHandler(getMessage)
+  sendCommand('systemAll')
+
+  setTimeout(() => {
+    setMessageHandler(handleAlgorithmMessage)
+    sendCommand("findAll")
+  }, 1000)
+})
+
+onDeactivated(() => {
+  console.log('flowChart_old页面失活，清理WebSocket处理器')
+  // 页面切换时清理消息处理器，避免影响其他页面
+  clearMessageHandler()
 })
 
 onUnmounted(() => {
   if (graph.value) {
     graph.value.destroy()
   }
-  if (socket.value) {
-    socket.value.close()
-  }
+  // 组件卸载时也清理处理器
+  clearMessageHandler()
 })
 
 // 格式化数值，超过五位小数的保留五位小数
@@ -281,28 +341,6 @@ const validateAlgorithmData = (item: any): boolean => {
   return item && typeof item === 'object' && item.name && typeof item.name === 'string'
 }
 
-// WebSocket相关方法
-const init = () => {
-  socket.value = globalWebSocket.ws as WebSocket
-  if (socket.value) {
-    socket.value.onerror = error
-    socket.value.onmessage = getMessage
-  }
-}
-
-const error = () => {
-  console.error('WebSocket连接错误')
-  ElMessage.error('连接失败，请检查网络')
-}
-
-const send = (ms: string) => {
-  if (socket.value) {
-    socket.value.send(ms)
-  } else {
-    ElMessage.error('连接未建立，请稍后重试')
-  }
-}
-
 // 接收WebSocket数据
 const getMessage = (msg: MessageEvent) => {
   try {
@@ -310,17 +348,19 @@ const getMessage = (msg: MessageEvent) => {
 
     // 处理成功消息
     const successMessages = {
-      'delete success': '成功删除',
       'add success': '成功添加',
+      'add relation success': '成功添加算法关联',
       'move success': '成功移动',
+      'delete success': '成功删除',
       'delete relation success': '成功解除绑定'
     }
 
     if (successMessages[msg.data as keyof typeof successMessages]) {
       ElMessage.success(successMessages[msg.data as keyof typeof successMessages])
-      // 刷新数据
+      sendCommand('systemAll')
+      // 刷新树图
       setTimeout(() => {
-        send('systemAll')
+        select()
       }, 500)
       return
     }
@@ -331,11 +371,13 @@ const getMessage = (msg: MessageEvent) => {
       return
     }
 
+    console.log('parsedData', parsedData)
+
     json.value = Array.isArray(parsedData) ? parsedData : []
 
     // 清空并重新填充系统列表
     systems.value = []
-    json.value.forEach((item: any, index: number) => {
+    json.value.forEach((item: any) => {
       if (!validateSystemData(item)) {
         console.warn('系统数据无效:', item)
         return
@@ -358,32 +400,91 @@ const getMessage = (msg: MessageEvent) => {
   }
 }
 
-const beginMove = () => {
-  moveVisible.value = true
-  if (socket.value) {
-    socket.value.onmessage = getProducts
-  }
-  send('productAll')
-}
-
-const getProducts = (msg: MessageEvent) => {
+// 处理算法数据消息
+const handleAlgorithmMessage = (msg: MessageEvent) => {
   try {
     const parsedData = safeParseJSON(msg.data)
-    if (parsedData) {
-      products.value = Array.isArray(parsedData.products) ?
-        parsedData.products.filter(validateProductData) : []
-    } else {
-      products.value = []
+    if (!parsedData) {
+      console.error('算法数据解析失败')
+      return
     }
+
+    console.log('算法数据:', parsedData)
+    algorithms.value = Array.isArray(parsedData) ? parsedData.filter(validateAlgorithmData) : []
+
   } catch (error) {
-    console.error('获取产品数据失败:', error)
-    ElMessage.error('获取产品数据失败')
-    products.value = []
-  }
-  if (socket.value) {
-    socket.value.onmessage = getMessage
+    console.error('处理算法消息失败:', error)
+    ElMessage.error('加载算法数据失败')
+  } finally {
+    setMessageHandler(getMessage)
   }
 }
+
+// 系统选择变更处理（用于算法关联）
+const onSystemChange = () => {
+  // 清空产品选择
+  addForm.proId = ''
+  availableProducts.value = []
+
+  if (!addForm.sysId) {
+    return
+  }
+
+  // 根据选择的系统获取对应的产品列表
+  const selectedSystem = json.value.find((system: any) => system.id === addForm.sysId)
+  if (selectedSystem && Array.isArray(selectedSystem.pro)) {
+    availableProducts.value = selectedSystem.pro.filter(validateProductData)
+    console.log('可用产品列表:', availableProducts.value.length, '个产品')
+  }
+}
+
+// 打开添加对话框
+const openAddDialog = () => {
+  // 重置表单数据
+  Object.assign(addForm, {
+    sysId: '',
+    proId: '',
+    algorithmId: '',
+    name: '',
+    type: '',
+    description: ''
+  })
+
+  // 清空可用产品列表
+  availableProducts.value = []
+
+  // 重置单选框为添加系统
+  radio.value = '1'
+
+  // 显示对话框
+  addVisible.value = true
+}
+
+// const beginMove = () => {
+//   moveVisible.value = true
+//   setMessageHandler(getProducts)
+//   sendCommand('productAll')
+// }
+
+// const getProducts = (msg: MessageEvent) => {
+//   try {
+//     const parsedData = safeParseJSON(msg.data)
+//     if (parsedData) {
+//       products.value = Array.isArray(parsedData.products) ?
+//         parsedData.products.filter(validateProductData) : []
+//     } else {
+//       products.value = []
+//     }
+//   }
+//   catch (error) {
+//     console.error('获取产品数据失败:', error)
+//     ElMessage.error('获取产品数据失败')
+//     products.value = []
+//   }
+//   finally {
+//     setMessageHandler(getMessage)
+//   }
+// }
 
 const selectSys = () => {
   const targetId = deleteForm.sysId || moveForm.toSystemId
@@ -391,10 +492,42 @@ const selectSys = () => {
   if (system && Array.isArray(system.pro)) {
     products.value = system.pro.filter(validateProductData)
     proVisible.value = products.value.length > 0
+
+    // 如果是删除算法，需要重置算法相关状态
+    if (dRadio.value === '3') {
+      aloVisible.value = false
+      deleteForm.proId = ''
+      deleteForm.algorithmId = ''
+      algorithms.value = []
+    }
   } else {
     products.value = []
     proVisible.value = false
+    aloVisible.value = false
   }
+}
+
+const selectPro = () => {
+  if (!deleteForm.proId) {
+    aloVisible.value = false
+    algorithms.value = []
+    deleteForm.algorithmId = ''
+    return
+  }
+
+  // 根据选择的产品获取对应的算法列表
+  const selectedProduct = products.value.find((product: any) => product.id === deleteForm.proId)
+  if (selectedProduct && Array.isArray(selectedProduct.alo)) {
+    algorithms.value = selectedProduct.alo.filter(validateAlgorithmData)
+    aloVisible.value = algorithms.value.length > 0
+    console.log('可用算法列表:', algorithms.value.length, '个算法')
+  } else {
+    algorithms.value = []
+    aloVisible.value = false
+  }
+
+  // 重置算法选择
+  deleteForm.algorithmId = ''
 }
 
 // 对话框取消操作
@@ -402,13 +535,17 @@ const cancelDelete = () => {
   deleteVisible.value = false
   deleteForm.sysId = ''
   deleteForm.proId = ''
+  deleteForm.algorithmId = ''
   proVisible.value = false
+  aloVisible.value = false
+  products.value = []
+  algorithms.value = []
 }
 
-// 系统和产品管理方法
+// 系统、产品和算法管理方法
 const addSysOrPro = () => {
   // 验证表单数据
-  if (!addForm.name.trim()) {
+  if (!addForm.name.trim() && radio.value !== '3') {
     ElMessage.warning('请输入名称')
     return
   }
@@ -418,29 +555,67 @@ const addSysOrPro = () => {
     return
   }
 
+  if (radio.value === '3') {
+    // 算法添加验证
+    if (!addForm.sysId) {
+      ElMessage.warning('请选择关联系统')
+      return
+    }
+    if (!addForm.proId) {
+      ElMessage.warning('请选择关联产品')
+      return
+    }
+    if (!addForm.algorithmId) {
+      ElMessage.warning('请选择算法')
+      return
+    }
+  }
+
   addVisible.value = false
   let data: any
 
   if (radio.value === '1') {
+    // 添加系统
     data = {
       name: addForm.name.trim(),
       description: addForm.description.trim()
     }
-    send('addSystem')
+    sendCommand('addSystem')
   } else if (radio.value === '2') {
+    // 添加产品
     data = {
       ...addForm,
       name: addForm.name.trim(),
       description: addForm.description.trim(),
       type: addForm.type.trim()
     }
-    send('addProduct')
+    sendCommand('addProduct')
+  } else if (radio.value === '3') {
+    // 添加算法关联
+    data = {
+      sysId: addForm.sysId,
+      proId: addForm.proId,
+      aloId: addForm.algorithmId
+    }
+    //TODO 添加算法关联
+    sendCommand('addProAloRelation')
   }
 
-  send(JSON.stringify(data))
+  console.log("data", data)
+  sendCommand(JSON.stringify(data))
 
   // 重置表单
-  Object.assign(addForm, { sysId: '', name: '', type: '', description: '' })
+  Object.assign(addForm, {
+    sysId: '',
+    proId: '',
+    algorithmId: '',
+    name: '',
+    type: '',
+    description: ''
+  })
+
+  // 清空可用产品列表
+  availableProducts.value = []
 }
 
 const delSysOrPro = () => {
@@ -455,23 +630,43 @@ const delSysOrPro = () => {
     return
   }
 
+  if (dRadio.value === '3' && !deleteForm.algorithmId) {
+    ElMessage.warning('请选择要删除的算法')
+    return
+  }
+
   deleteVisible.value = false
   proVisible.value = false
+  aloVisible.value = false
 
   let data: any
   if (dRadio.value === '1') {
     data = { id: deleteForm.sysId }
-    send('deleteSystem')
+    sendCommand('deleteSystem')
   } else if (dRadio.value === '2') {
     data = { id: deleteForm.proId }
-    send('deleteProduct')
+    sendCommand('deleteProduct')
+  } else if (dRadio.value === '3') {
+    // 删除算法关联
+    data = {
+      sysId: deleteForm.sysId,
+      proId: deleteForm.proId,
+      aloId: deleteForm.algorithmId
+    }
+    sendCommand('deleteProAloRelation')
   }
 
-  send(JSON.stringify(data))
+  console.log("data", data)
+  sendCommand(JSON.stringify(data))
 
-  // 重置表单
+  // 重置表单和状态
   deleteForm.sysId = ''
   deleteForm.proId = ''
+  deleteForm.algorithmId = ''
+  proVisible.value = false
+  aloVisible.value = false
+  products.value = []
+  algorithms.value = []
 }
 
 const moveProduct = () => {
@@ -494,17 +689,18 @@ const moveProduct = () => {
       sysId: moveForm.toSystemId,
       proId: moveForm.proId
     }
-    send('moveProduct')
+    sendCommand('moveProduct')
   } else if (mRadio.value === '2') {
     data = { proId: moveForm.proId }
-    send('deleteRelation')
+    sendCommand('deleteRelation')
   }
 
-  send(JSON.stringify(data))
+  sendCommand(JSON.stringify(data))
 
-  // 重置表单
+  // 重置表单和状态
   moveForm.proId = ''
   moveForm.toSystemId = ''
+  products.value = []
 }
 
 // 查询和搜索方法
@@ -516,6 +712,7 @@ const select = () => {
 
   const systemIndex = json.value.findIndex((it: any) => it?.id === selectedSystemId.value)
   if (systemIndex >= 0) buildTreeData(systemIndex)
+  else if (graph.value) graph.value.destroy()
 }
 
 const search = () => {
@@ -529,8 +726,6 @@ const search = () => {
   if (systemIndex !== -1) {
     selectedSystemId.value = json.value[systemIndex]?.id
     buildTreeData(systemIndex)
-  } else {
-    ElMessage.error('未找到匹配的系统')
   }
 }
 
@@ -637,9 +832,7 @@ const buildTreeData = (systemIndex: number) => {
   })
 
   // 更新响应式数据
-  data.value = root
-  console.log('构建的树形数据:', data.value)
-  console.log('节点总数:', nodeCount)
+  treeData.value = root
 
   // 重新创建图表
   if (graph.value) {
@@ -650,7 +843,7 @@ const buildTreeData = (systemIndex: number) => {
   newGraph(1000, 80 * minNodeCount)
 
   if (graph.value) {
-    graph.value.data(data.value)
+    graph.value.data(treeData.value)
     graph.value.render()
     graph.value.fitCenter()
 
@@ -664,8 +857,8 @@ const deleteRelation = (id: string) => {
   try {
     const proId = id.split("")[3] + ""
     const data = { proId }
-    send('deleteRelation')
-    send(JSON.stringify(data))
+    sendCommand('deleteRelation')
+    sendCommand(JSON.stringify(data))
   } catch (error) {
     console.error('删除关系失败:', error)
     ElMessage.error('删除关系失败')
@@ -784,10 +977,8 @@ const extractNodeInfo = (nodeId: string, sysId: number) => {
 
 // 初始化图表搜索
 const initializeGraphSearch = () => {
-  send('findAllGraph')
-  if (socket.value) {
-    socket.value.onmessage = getRectAll
-  }
+  setMessageHandler(getRectAll)
+  sendCommand('findAllGraph')
 }
 
 // 跳转到算法页面
@@ -820,28 +1011,27 @@ const getRectAll = (msg: MessageEvent) => {
     }
 
     if (flag === 0) {
-      send("addGraph")
-      send(JSON.stringify({
+      const gotoRectangle = (msg: MessageEvent) => {
+        router.push({
+          path: '/rectangle',
+          query: {
+            pictureName: pictureName.value,
+            id: msg.data,
+            isSystem: isSystem.value.toString(),
+            sysId: sysAndProId.value.sysId?.toString() || '',
+            proId: sysAndProId.value.proId?.toString() || ''
+          }
+        })
+      }
+
+      setMessageHandler(gotoRectangle)
+      sendCommand("addGraph")
+      sendCommand(JSON.stringify({
         name: pictureName.value,
         message: "",
         sysId: sysAndProId.value.sysId,
         proId: sysAndProId.value.proId
       }))
-      if (socket.value) {
-        socket.value.onmessage = (msg: MessageEvent) => {
-          router.push({
-            path: '/rectangle',
-            query: {
-              pictureName: pictureName.value,
-              id: msg.data,
-              isSystem: isSystem.value.toString(),
-              sysId: sysAndProId.value.sysId?.toString() || '',
-              proId: sysAndProId.value.proId?.toString() || ''
-            }
-          })
-        }
-
-      }
     } else {
       router.push({
         path: '/rectangle',
@@ -863,7 +1053,7 @@ const getRectAll = (msg: MessageEvent) => {
 
 
 // 创建G6图表 - 保持原有的antvg6逻辑
-const newGraph = (a: number, b: number) => {
+const newGraph = (_width: number, b: number) => {
   G6.registerEdge('hvh', {
     draw(cfg: any, group: any) {
       const startPoint = cfg.startPoint
@@ -887,7 +1077,7 @@ const newGraph = (a: number, b: number) => {
 
   const contextMenu = new (G6 as any).Menu({
     className: "context-menu",
-    getContent(evt: any) {
+    getContent(_evt: any) {
       const header = '解除绑定'
       return `<h3>${header}</h3>`
     },

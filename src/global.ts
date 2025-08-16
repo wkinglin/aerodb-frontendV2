@@ -11,6 +11,7 @@ class GlobalWebSocket {
     private readonly path = "ws://127.0.0.1:9091/"
     private readonly maxReconnectAttempts = 5
     private reconnectTimer: NodeJS.Timeout | null = null
+    private currentHandler: ((event: MessageEvent) => void) | null = null
 
     public state = reactive<WebSocketState>({
         isConnected: false,
@@ -83,6 +84,10 @@ class GlobalWebSocket {
 
         try {
             this._ws = await this.connect()
+            // 重连后恢复当前的消息处理器
+            if (this.currentHandler && this._ws) {
+                this._ws.onmessage = this.currentHandler
+            }
         } catch (error) {
             console.error("WebSocket 初始化失败:", error)
             this.scheduleReconnect()
@@ -114,9 +119,22 @@ class GlobalWebSocket {
     }
 
     public setMessageHandler(handler: (event: MessageEvent) => void): void {
+        this.currentHandler = handler
         if (this._ws) {
             this._ws.onmessage = handler
         }
+    }
+
+    public clearMessageHandler(): void {
+        console.log('清除WebSocket消息处理器')
+        this.currentHandler = null
+        if (this._ws) {
+            this._ws.onmessage = null
+        }
+    }
+
+    public getCurrentHandler(): ((event: MessageEvent) => void) | null {
+        return this.currentHandler
     }
 }
 

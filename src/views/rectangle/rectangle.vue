@@ -8,8 +8,7 @@
                 <div class="flow-container">
                     <VueFlow v-model:nodes="flowNodes" v-model:edges="flowEdges" :fit-view-on-init="true"
                         :nodes-draggable="true" :nodes-connectable="true" :elements-selectable="true"
-                        :nodes-focusable="true"
-                        @connect="onConnect" class="vue-flow-instance">
+                        :nodes-focusable="true" @connect="onConnect" class="vue-flow-instance">
 
                         <!-- 自定义节点模板 -->
                         <template #node-custom="customNodeProps">
@@ -63,37 +62,70 @@
 
                         <!-- 组节点模板 -->
                         <template #node-group="groupNodeProps">
-                            <NodeResizer 
-                                :min-width="300" 
-                                :min-height="200"
+                            <NodeResizer :min-width="300" :min-height="200"
                                 :is-visible="(groupNodeProps as any).selected"
-                                @resize="onNodeResize"
-                            />
+                                @resize="onGroupNodeResize($event, groupNodeProps)" />
 
-                            <div class="group-node-container" :style="{
-                                backgroundColor: (groupNodeProps as any).data?.backgroundColor || 'rgba(107, 114, 128, 0.08)',
-                                borderColor: (groupNodeProps as any).data?.borderColor || '#6b7280',
-                                borderStyle: 'solid',
-                                borderWidth: '3px',
-                                borderRadius: '16px',
-                                width: '100%',
-                                height: '100%',
-                                padding: '20px',
-                                position: 'relative'
-                            }">
+                            <div class="group-node-container" @click="handleCustomNodeClick($event, groupNodeProps)"
+                                :style="{
+                                    backgroundColor: (groupNodeProps as any).data?.backgroundColor || 'rgba(107, 114, 128, 0.08)',
+                                    borderColor: (groupNodeProps as any).data?.borderColor || '#6b7280',
+                                    borderStyle: 'solid',
+                                    borderWidth: '3px',
+                                    borderRadius: '16px',
+                                    width: '100%',
+                                    height: '100%',
+                                    padding: '20px',
+                                    position: 'relative'
+                                }">
                                 <!-- 连接点 -->
                                 <Handle type="target" :position="Position.Top" class="group-handle" />
                                 <Handle type="source" :position="Position.Bottom" class="group-handle" />
                                 <Handle type="target" :position="Position.Left" class="group-handle" />
                                 <Handle type="source" :position="Position.Right" class="group-handle" />
 
-                                <div class="group-header" >
-                                    <h4 class="group-title">{{ (groupNodeProps as any).data?.name }}</h4>
-                                    <span class="group-badge"
-                                        :class="getGroupBadgeClass((groupNodeProps as any).data?.groupType)">
-                                        {{ (groupNodeProps as any).data?.typeLabel || '普通' }}
-                                    </span>
+                                <div class="group-header">
+                                    <div class="group-header-left">
+                                        <h4 class="group-title">{{ (groupNodeProps as any).data?.name }}</h4>
+                                        <span class="group-badge"
+                                            :class="getGroupBadgeClass((groupNodeProps as any).data?.groupType)">
+                                            {{ (groupNodeProps as any).data?.typeLabel || '普通' }}
+                                        </span>
+                                    </div>
+
+                                    <!-- 组节点属性值显示 -->
+                                    <div class="group-values">
+                                        <div class="group-kv-grid">
+                                            <div class="group-kv-item">
+                                                <span class="group-kv-label">R</span>
+                                                <span class="group-kv-value"
+                                                    :title="getFormattedValue((groupNodeProps as any).data?.R)">{{
+                                                        getFormattedValue((groupNodeProps as any).data?.R) }}</span>
+                                            </div>
+                                            <div class="group-kv-item">
+                                                <span class="group-kv-label">DR</span>
+                                                <span class="group-kv-value"
+                                                    :title="getFormattedValue((groupNodeProps as any).data?.DR)">{{
+                                                        getFormattedValue((groupNodeProps as any).data?.DR) }}</span>
+                                            </div>
+                                            <div class="group-kv-item">
+                                                <span class="group-kv-label">H</span>
+                                                <span class="group-kv-value"
+                                                    :title="getFormattedValue((groupNodeProps as any).data?.H)">{{
+                                                        getFormattedValue((groupNodeProps as any).data?.H) }}</span>
+                                            </div>
+                                            <div class="group-kv-item">
+                                                <span class="group-kv-label">Z</span>
+                                                <span class="group-kv-value"
+                                                    :title="getFormattedValue((groupNodeProps as any).data?.Z)">{{
+                                                        getFormattedValue((groupNodeProps as any).data?.Z) }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
+
+
+
                                 <div class="group-content">
                                     <!-- 组内容区域，子节点会自动渲染在这里 -->
                                 </div>
@@ -265,7 +297,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onActivated, Ref } from 'vue'
+import { ref, onActivated, Ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useWebSocket } from '@/composables/useWebSocket'
@@ -370,7 +402,14 @@ const aloForm: Ref<AloForm> = ref({
 
 
 onActivated(() => {
-    init()
+    // 清空之前的数据状态，避免缓存问题
+    nodes.value = []
+    edges.value = []
+    flowNodes.value = []
+    flowEdges.value = []
+    group.value = []
+    recId.value = 0
+
     // 从路由query参数获取数据，不再依赖store
     pictureName.value = route.query.pictureName as string || ''
     id.value = parseInt(route.query.id as string || '0')
@@ -379,35 +418,21 @@ onActivated(() => {
         sysId: parseInt(route.query.sysId as string || '0'),
         proId: parseInt(route.query.proId as string || '0')
     }
-    console.log(pictureName.value, isSystem.value, sysAndProId.value)
+    console.log(pictureName.value, id.value, isSystem.value, sysAndProId.value)
 
     // 获取数据
-    if (isSystem.value) {
-        sendCommand("systemAll")
-    }
-    else {
-        sendCommand("findAll")
-    }
-
-
-})
-
-// 初始化函数
-const init = (): void => {
     setMessageHandler(getAloAndPro)
-}
+    sendCommand("systemAll")
+})
 
 // 获取算法和产品数据函数
 const getAloAndPro = (msg: MessageEvent): void => {
     const json = JSON.parse(msg.data);
+    console.log(json)
 
-    if (isSystem.value) {
-        system.value = json.find((item: any) => item.id === sysAndProId.value.sysId)
-        pro.value = system.value?.pro || []
-    } else {
-        // 获取算法数据
-        alo.value = Array.isArray(json) ? json : []
-    }
+    system.value = json.find((item: any) => item.id === sysAndProId.value.sysId)
+    pro.value = system.value?.pro || []
+    alo.value = pro.value.find((item: any) => item.id === sysAndProId.value.proId)?.alo || []
 
     setMessageHandler(getMessage)
     sendCommand("checkGraph");
@@ -421,6 +446,10 @@ const getMessage = (msg: MessageEvent): void => {
             message: '成功提交',
             type: 'success'
         });
+        return
+    }
+
+    if (msg.data === "修改成功") {
         return
     }
 
@@ -443,19 +472,19 @@ const getMessage = (msg: MessageEvent): void => {
             // 如果当前节点是算法节点，则更新节点值
             if (newNode.id === currentAloData.value.aloId) {
                 if (currentAloData.value.aloValue !== undefined) {
-                    newNode.R = formatNumericValue(currentAloData.value.aloValue.R, 'R');
-                    newNode.DR = formatNumericValue(currentAloData.value.aloValue.DR, 'DR');
-                    newNode.H = formatNumericValue(currentAloData.value.aloValue.H, 'H');
-                    newNode.Z = formatNumericValue(currentAloData.value.aloValue.Z, 'Z');
+                    newNode.R = getFormattedValue(currentAloData.value.aloValue.R);
+                    newNode.DR = getFormattedValue(currentAloData.value.aloValue.DR);
+                    newNode.H = getFormattedValue(currentAloData.value.aloValue.H);
+                    newNode.Z = getFormattedValue(currentAloData.value.aloValue.Z);
                 }
                 else {
-                    newNode.R = formatNumericValue(0, 'R');
-                    newNode.DR = formatNumericValue(0, 'DR');
-                    newNode.H = formatNumericValue(0, 'H');
-                    newNode.Z = formatNumericValue(0, 'Z');
+                    newNode.R = getFormattedValue(0);
+                    newNode.DR = getFormattedValue(0);
+                    newNode.H = getFormattedValue(0);
+                    newNode.Z = getFormattedValue(0);
                 }
                 if (currentAloData.value.aloValue !== undefined && newNode.name.indexOf("\n\n") === -1 && !isSystem.value) {
-                    const formattedR = formatNumericValue(currentAloData.value.aloValue.R).replace(/^R:/, '');
+                    const formattedR = getFormattedValue(currentAloData.value.aloValue.R).replace(/^R:/, '');
                     newNode.name = newNode.name + "\n\n可靠度:" + formattedR;
                 }
             }
@@ -505,7 +534,7 @@ const addProduct = (): void => {
     // 创建自定义节点
     const position = groupItem?.key
         ? { x: 50 + Math.random() * 200, y: 50 + Math.random() * 100 } // 组内节点相对位置
-        : { x: 120 + Math.random() * 200, y: 120 + Math.random() * 200 } // 自由节点位置
+        : { x: 50 + Math.random() * 200, y: 50 + Math.random() * 200 } // 自由节点位置
 
     const node: Node = {
         id: productItem.id,
@@ -517,16 +546,16 @@ const addProduct = (): void => {
 
         // 是否分组
         type: groupItem ? 'group' : 'pro',
-        isGroup: groupItem ? true : false,
-        group: groupItem ? groupItem.key : 0,
+        isGroup: false,
+        group: groupItem ? groupItem.key : -1,
         groupType: groupItem ? groupItem.groupType : "normal",
-        isHot: groupItem ? groupItem.groupType === 'hot' : false,
+        hot: groupItem ? groupItem.groupType === 'hot' : false,
 
         // 属性值
-        R: formatNumericValue(0, 'R'),
-        DR: formatNumericValue(0, 'DR'),
-        H: formatNumericValue(0, 'H'),
-        Z: formatNumericValue(0, 'Z'),
+        R: productItem.R ? getFormattedValue(productItem.R) : getFormattedValue(0),
+        DR: productItem.DR ? getFormattedValue(productItem.DR) : getFormattedValue(0),
+        H: productItem.H ? getFormattedValue(productItem.H) : getFormattedValue(0),
+        Z: productItem.Z ? getFormattedValue(productItem.Z) : getFormattedValue(0),
         reliability: "",
     }
 
@@ -538,15 +567,24 @@ const addProduct = (): void => {
             label: productItem.name,
             ...node,
             onCustomEvent: (_e: MouseEvent, _data: any) => {
-                console.log('点击节点的recId', _data.recId)
+                // 打开编辑对话框
+                const currentNode = nodes.value.find((n: Node) => n.recId === _data.recId)
+                if (currentNode) {
+                    aloForm.value.recId = String(currentNode.recId)
+                    aloForm.value.R = getFormattedValue(currentNode.R)
+                    aloForm.value.DR = getFormattedValue(currentNode.DR)
+                    aloForm.value.H = getFormattedValue(currentNode.H)
+                    aloForm.value.Z = getFormattedValue(currentNode.Z)
+                }
+                changeNodeVisible.value = true
             },
             onNavigate: (_e: MouseEvent) => {
                 router.push({ path: '/seeRect' })
                 return
             }
         },
-        parentNode: node.isGroup ? String(node.group) : undefined,
-        extent: node.isGroup ? 'parent' as any : undefined,
+        parentNode: groupItem ? String(groupItem.key) : undefined,
+        extent: groupItem ? 'parent' as any : undefined,
     } as any)
 
     nodes.value.push(node)
@@ -569,7 +607,7 @@ const addAlo = (): void => {
 
     const position = groupItem?.key
         ? { x: 50 + Math.random() * 200, y: 50 + Math.random() * 100 } // 组内节点相对位置
-        : { x: 120 + Math.random() * 200, y: 120 + Math.random() * 200 } // 自由节点位置
+        : { x: 50 + Math.random() * 200, y: 50 + Math.random() * 200 } // 自由节点位置
 
     const node: Node = {
         id: aloItem.id,
@@ -581,16 +619,16 @@ const addAlo = (): void => {
 
         // 是否分组
         type: groupItem ? 'group' : 'alo',
-        isGroup: groupItem ? true : false,
-        group: groupItem ? groupItem.key : 0,
+        isGroup: false,
+        group: groupItem ? groupItem.key : -1,
         groupType: groupItem ? groupItem.groupType : "normal",
-        isHot: groupItem ? groupItem.groupType === 'hot' : false,
+        hot: groupItem ? groupItem.groupType === 'hot' : false,
 
         // 属性值
-        R: formatNumericValue(0, 'R'),
-        DR: formatNumericValue(0, 'DR'),
-        H: formatNumericValue(0, 'H'),
-        Z: formatNumericValue(0, 'Z'),
+        R: aloItem.R ? getFormattedValue(aloItem.R) : getFormattedValue(0),
+        DR: aloItem.DR ? getFormattedValue(aloItem.DR) : getFormattedValue(0),
+        H: aloItem.H ? getFormattedValue(aloItem.H) : getFormattedValue(0),
+        Z: aloItem.Z ? getFormattedValue(aloItem.Z) : getFormattedValue(0),
         reliability: "",
     }
 
@@ -626,8 +664,8 @@ const addAlo = (): void => {
                 router.push({ path: 'alg', query: { id: aloItem.id } })
             }
         },
-        parentNode: node.isGroup ? String(node.group) : undefined,
-        extent: node.isGroup ? 'parent' as any : undefined,
+        parentNode: groupItem ? String(groupItem.key) : undefined,
+        extent: groupItem ? 'parent' as any : undefined,
     } as any)
 
     nodes.value.push(node)
@@ -641,7 +679,10 @@ const addAlo = (): void => {
 // 添加分组节点函数
 const addGroup = (): void => {
     const groupType = select.value.backup === 'hot' ? 'hot' : select.value.backup === 'cold' ? 'cold' : 'normal'
-    const position = { x: 120 + Math.random() * 200, y: 120 + Math.random() * 200 }
+    const position = { x: 50 + Math.random() * 200, y: 50 + Math.random() * 200 }
+    const defaultWidth = 350
+    const defaultHeight = 250
+
     const node: Node = {
         id: recId.value,
         name: select.value.groupName,
@@ -653,32 +694,54 @@ const addGroup = (): void => {
         // 是否分组
         type: 'group',
         isGroup: true,
-        group: recId.value,
+        group: -1,
         groupType: groupType,
-        isHot: groupType === 'hot' ? true : false,
+        hot: groupType === 'hot' ? true : false,
 
         // 属性值
-        R: formatNumericValue(0, 'R'),
-        DR: formatNumericValue(0, 'DR'),
-        H: formatNumericValue(0, 'H'),
-        Z: formatNumericValue(0, 'Z'),
+        R: getFormattedValue(0),
+        DR: getFormattedValue(0),
+        H: getFormattedValue(0),
+        Z: getFormattedValue(0),
         reliability: "",
+
+        // 默认尺寸
+        width: defaultWidth,
+        height: defaultHeight,
     }
 
     const groupBg = getGroupBackgroundColor(groupType)
     const groupBorder = getGroupBorderColor(groupType)
 
     flowNodes.value.push({
-        id,
+        id: String(recId.value),
         type: 'group', // 现在我们有了group模板，可以使用group类型
         position: { x: 150 + Math.random() * 100, y: 150 + Math.random() * 100 },
+        style: {
+            width: defaultWidth,
+            height: defaultHeight,
+        },
         data: {
             label: select.value.groupName,
             typeLabel: getGroupTypeLabel(groupType),
             backgroundColor: groupBg,
             borderColor: groupBorder,
             ...node,
-        }
+            onCustomEvent: (_e: MouseEvent, _data: any) => {
+                ElMessage.success(`节点 ${_data.name} 被点击!`)
+
+                // 打开编辑对话框
+                const currentNode = nodes.value.find((n: Node) => n.recId === _data.recId)
+                if (currentNode) {
+                    aloForm.value.recId = String(currentNode.recId)
+                    aloForm.value.R = getFormattedValue(currentNode.R)
+                    aloForm.value.DR = getFormattedValue(currentNode.DR)
+                    aloForm.value.H = getFormattedValue(currentNode.H)
+                    aloForm.value.Z = getFormattedValue(currentNode.Z)
+                }
+                changeNodeVisible.value = true
+            },
+        },
     } as any)
 
     nodes.value.push(node)
@@ -701,38 +764,48 @@ const addLine = (): void => {
 }
 
 // 打开Excel函数
-const openExcel = (): void => {
-    // 由于安全限制，浏览器环境不能直接访问文件系统
-    // 这里需要通过后端API来处理文件操作
-    const fileInfo = {
-        sysId: sysAndProId.value.sysId,
-        proId: sysAndProId.value.proId
-    }
+// const openExcel = (): void => {
+//     // 由于安全限制，浏览器环境不能直接访问文件系统
+//     // 这里需要通过后端API来处理文件操作
+//     const fileInfo = {
+//         sysId: sysAndProId.value.sysId,
+//         proId: sysAndProId.value.proId
+//     }
 
-    ElMessage.info('文件操作需要通过后端处理')
-    console.log('Excel文件信息:', fileInfo)
+//     ElMessage.info('文件操作需要通过后端处理')
+//     console.log('Excel文件信息:', fileInfo)
 
-    // 可以发送请求给后端来处理Excel文件
-    // send('openExcel')
-    // send(JSON.stringify(fileInfo))
-}
+//     // 可以发送请求给后端来处理Excel文件
+//     // send('openExcel')
+//     // send(JSON.stringify(fileInfo))
+// }
 
 // 修改节点值函数
 const changeNodeValue = (): void => {
     changeNodeVisible.value = false
-    nodes.value.forEach((node: Node) => {
-        if (node.recId === Number(aloForm.value.recId)) {
-            node.R = formatNumericValue(aloForm.value.R, 'R')
-            node.DR = formatNumericValue(aloForm.value.DR, 'DR')
-            node.H = formatNumericValue(aloForm.value.H, 'H')
-            node.Z = formatNumericValue(aloForm.value.Z, 'Z')
-        }
-    })
+    const select_node = nodes.value.find((node: Node) => node.recId === Number(aloForm.value.recId))
+    if (select_node) {
+        select_node.R = getFormattedValue(aloForm.value.R)
+        select_node.DR = getFormattedValue(aloForm.value.DR)
+        select_node.H = getFormattedValue(aloForm.value.H)
+        select_node.Z = getFormattedValue(aloForm.value.Z)
+    }
 
-    // 同步 vue-flow 数据
-    const { flowNodes: nf, flowEdges: ef } = node2Flow(nodes.value, edges.value)
-    flowNodes.value = nf
-    flowEdges.value = ef
+    flowNodes.value = flowNodes.value.map((flowNode: any) => {
+        if (flowNode.data.recId === Number(aloForm.value.recId)) {
+            return {
+                ...flowNode,
+                data: {
+                    ...flowNode.data,
+                    R: getFormattedValue(aloForm.value.R),
+                    DR: getFormattedValue(aloForm.value.DR),
+                    H: getFormattedValue(aloForm.value.H),
+                    Z: getFormattedValue(aloForm.value.Z)
+                }
+            }
+        }
+        return flowNode
+    })
 
     aloForm.value = {
         recId: "",
@@ -742,25 +815,35 @@ const changeNodeValue = (): void => {
         H: '',
         Z: '',
     }
+
+    ElMessage.success('节点值修改成功, 需要手动保存')
 }
 
 // 连接（串联/并联）
 const onConnect = (connection: Connection) => {
+    // recId
     const id = `e-${connection.source}-${connection.target}-${Date.now()}`
-    flowEdges.value.push({ id, source: String(connection.source), target: String(connection.target) })
+    flowEdges.value.push({ id, source: String(connection.source), target: String(connection.target), animated: false, type: 'default', style: { stroke: 'black', strokeWidth: 2 } })
+    edges.value.push({ from: String(connection.source), to: String(connection.target), color: 'black' })
 }
 
-// 处理节点调整大小事件
-const onNodeResize = (event: any) => {
-    console.log('Node resized:', event)
-    // 更新flowNodes中对应节点的尺寸
-    const nodeIndex = flowNodes.value.findIndex(n => n.id === event.nodeId)
-    if (nodeIndex !== -1) {
-        flowNodes.value[nodeIndex].dimensions = {
-            width: event.dimensions.width,
-            height: event.dimensions.height
+// 组节点大小调整事件处理
+const onGroupNodeResize = (event: any, groupNodeProps: any) => {
+    const nodeId = groupNodeProps.id
+    const width = event.params.width
+    const height = event.params.height
+
+    // 同时更新 nodes 数组中的尺寸数据
+    nodes.value = nodes.value.map(node => {
+        if (String(node.recId) === nodeId && node.isGroup) {
+            return {
+                ...node,
+                width: Math.round(width),
+                height: Math.round(height)
+            }
         }
-    }
+        return node
+    })
 }
 
 // 删除选中（根据 vue-flow 的 selected 标记）
@@ -785,11 +868,7 @@ const deleteSelected = (): void => {
 
 // 保存函数
 const submit = (): void => {
-    // 将 flowNodes/flowEdges 转回 GoJS-like 结构
     const payload = flow2Node(flowNodes.value as any[], flowEdges.value as any[])
-    console.log('payload', payload)
-    console.log('flowNodes.value', flowNodes.value)
-    console.log('flowEdges.value', flowEdges.value)
 
     sendCommand('updateGraph')
     sendCommand(JSON.stringify({ id: id.value, name: pictureName.value, message: JSON.stringify(payload) }))
@@ -814,13 +893,11 @@ const getValue = (msg: MessageEvent): void => {
         return;
     }
 
-    console.log(json);
-
-    RHZvalue.value.R = formatNumericValue(json).replace(/^R:/, '');
-    console.log(RHZvalue.value);
+    RHZvalue.value.R = getFormattedValue(json);
 
     dialogVisible.value = true;
 
+    setMessageHandler(getMessage)
     sendCommand("updateProduct");
     const data = {
         id: id.value,
@@ -832,8 +909,6 @@ const getValue = (msg: MessageEvent): void => {
         Z: 0,
     }
     sendCommand(JSON.stringify(data));
-    console.log(data);
-    setMessageHandler(getMessage)
 }
 
 // 分组相关工具函数
@@ -888,31 +963,7 @@ const getFormattedValue = (value: any): string => {
     return num.toFixed(5).replace(/\.?0+$/, '')
 }
 
-// 数值格式化工具函数：统一处理所有R、DR、H、Z、可靠度值的小数截断
-const formatNumericValue = (value: any, prefix?: string): string => {
-    if (value == null || value === '' || value === undefined) return prefix ? `${prefix}:0` : '0'
-
-    const s = String(value)
-    let cleanValue = s
-    let currentPrefix = prefix || ''
-
-    // 如果已经有前缀，提取出来
-    if (s.includes(':')) {
-        const parts = s.split(':')
-        currentPrefix = parts[0]
-        cleanValue = parts[1] || '0'
-    }
-
-    const num = parseFloat(cleanValue)
-    if (isNaN(num)) return currentPrefix ? `${currentPrefix}:0` : '0'
-
-    // 截断到5位小数，并移除末尾的0
-    let formatted = num.toFixed(5).replace(/\.?0+$/, '')
-
-    return currentPrefix ? `${currentPrefix}:${formatted}` : formatted
-}
-
-// ------------ GoJS-like <-> Vue Flow 转换工具 -------------
+// ------------ node <-> Vue Flow 转换工具 -------------
 function parseLocToPos(loc?: string): { x: number; y: number } {
     if (!loc) return { x: 100 + Math.random() * 100, y: 100 + Math.random() * 100 }
     const [x, y] = String(loc).split(' ').map(Number)
@@ -931,6 +982,11 @@ function node2Flow(input_nodes: Node[], input_edges: Edge[]) {
             id: String(n.recId),
             type: n.isGroup ? 'group' : 'custom', // 组节点使用group类型
             position,
+            // 为组节点添加尺寸信息
+            style: n.isGroup && n.width && n.height ? {
+                width: n.width,
+                height: n.height,
+            } : undefined,
             data: {
                 label: n.name,
                 typeLabel: n.isGroup ? getGroupTypeLabel(n.groupType) : undefined,
@@ -938,18 +994,16 @@ function node2Flow(input_nodes: Node[], input_edges: Edge[]) {
                 borderColor: n.isGroup ? getGroupBorderColor(n.groupType) : undefined,
                 ...n,
                 onCustomEvent: (_e: MouseEvent, _data: any) => {
-                    if (n.type === 'alo') {
-                        // 打开编辑对话框
-                        const currentNode = nodes.value.find((n: Node) => n.recId === _data.recId)
-                        if (currentNode) {
-                            aloForm.value.recId = String(currentNode.recId)
-                            aloForm.value.R = getFormattedValue(currentNode.R)
-                            aloForm.value.DR = getFormattedValue(currentNode.DR)
-                            aloForm.value.H = getFormattedValue(currentNode.H)
-                            aloForm.value.Z = getFormattedValue(currentNode.Z)
-                        }
-                        changeNodeVisible.value = true
+                    // 打开编辑对话框
+                    const currentNode = nodes.value.find((n: Node) => n.recId === _data.recId)
+                    if (currentNode) {
+                        aloForm.value.recId = String(currentNode.recId)
+                        aloForm.value.R = getFormattedValue(currentNode.R)
+                        aloForm.value.DR = getFormattedValue(currentNode.DR)
+                        aloForm.value.H = getFormattedValue(currentNode.H)
+                        aloForm.value.Z = getFormattedValue(currentNode.Z)
                     }
+                    changeNodeVisible.value = true
                 },
                 onNavigate: (_e: MouseEvent) => {
                     if (n.type === 'alo') {
@@ -966,8 +1020,8 @@ function node2Flow(input_nodes: Node[], input_edges: Edge[]) {
                     }
                 }
             },
-            parentNode: n.isGroup ? String(n.group) : undefined,
-            extent: n.isGroup ? 'parent' as any : undefined,
+            parentNode: n.group && n.group !== -1 ? String(n.group) : undefined,
+            extent: n.group && n.group !== -1 ? 'parent' as any : undefined,
         }
         return flowNode
     })
@@ -986,13 +1040,17 @@ function flow2Node(flow_nodes: any[], flow_edges: any[]) {
         isGroup: n.data?.isGroup ?? false,
         group: n.data?.group ?? null,
         groupType: n.data?.groupType ?? 'normal',
-        isHot: n.data?.isHot ?? n.data?.groupType === 'hot' ? true : false,
+        hot: n.data?.hot ?? n.data?.groupType === 'hot' ? true : false,
 
-        R: formatNumericValue(n.data?.R || 0, 'R'),
-        DR: formatNumericValue(n.data?.DR || 0, 'DR'),
-        H: formatNumericValue(n.data?.H || 0, 'H'),
-        Z: formatNumericValue(n.data?.Z || 0, 'Z'),
+        R: getFormattedValue(n.data?.R || 0),
+        DR: getFormattedValue(n.data?.DR || 0),
+        H: getFormattedValue(n.data?.H || 0),
+        Z: getFormattedValue(n.data?.Z || 0),
         reliability: n.data?.reliability ?? "",
+
+        // 保存组节点尺寸信息
+        width: n.data?.isGroup ? (n.style?.width || n.data?.width) : undefined,
+        height: n.data?.isGroup ? (n.style?.height || n.data?.height) : undefined,
     }))
     const linkDataArray: Edge[] = flow_edges.map((e: any) => ({ from: String(e.source), to: String(e.target), color: e.style?.stroke ?? 'black' }))
     return { nodeDataArray, linkDataArray }
@@ -1544,6 +1602,8 @@ function flow2Node(flow_nodes: any[], flow_edges: any[]) {
     /* 确保容器可以被调整 */
     resize: both;
     overflow: visible;
+    display: flex;
+    flex-direction: column;
 }
 
 .group-node-container:hover {
@@ -1555,9 +1615,11 @@ function flow2Node(flow_nodes: any[], flow_edges: any[]) {
     position: absolute;
     top: -12px;
     left: 20px;
+    right: 20px;
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 12px;
+    justify-content: space-between;
     background: inherit;
     padding: 8px 16px;
     border-radius: 4px;
@@ -1567,6 +1629,13 @@ function flow2Node(flow_nodes: any[], flow_edges: any[]) {
     backdrop-filter: blur(4px);
 }
 
+.group-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+}
+
 .group-header .group-title {
     margin: 0;
     font-size: 16px;
@@ -1574,11 +1643,88 @@ function flow2Node(flow_nodes: any[], flow_edges: any[]) {
     color: #1f2937;
 }
 
+/* 组节点属性值显示区域 */
+.group-values {
+    display: flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    padding: 4px 8px;
+    backdrop-filter: blur(6px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s ease;
+}
+
+.group-values:hover {
+    background: rgba(255, 255, 255, 1);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    transform: translateY(-1px);
+}
+
+.group-kv-grid {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.group-kv-item {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    transition: all 0.2s ease;
+}
+
+.group-kv-item:hover {
+    transform: scale(1.02);
+}
+
+.group-kv-label {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 1px 4px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.2;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 1px 3px rgba(102, 126, 234, 0.3);
+    /* 文本渲染优化 */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+}
+
+.group-kv-value {
+    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+    color: #1f2937;
+    border: 1px solid #cbd5e1;
+    padding: 1px 4px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    line-height: 1.2;
+    box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.05);
+    min-width: 30px;
+    max-width: 50px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: center;
+    /* 文本渲染优化 */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+}
+
 .group-content {
     width: 100%;
-    height: 100%;
+    flex: 1;
     min-height: 150px;
     position: relative;
+    margin-top: 30px;
+    /* 为header留出空间 */
 }
 
 /* 增强分组样式 */

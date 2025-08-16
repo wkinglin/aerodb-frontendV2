@@ -6,11 +6,15 @@
                     <h3 class="card-title">算法管理</h3>
                     <div class="card-actions">
                         <el-button type="primary" @click="newAlo">
-                            <el-icon><Plus /></el-icon>
+                            <el-icon>
+                                <Plus />
+                            </el-icon>
                             创建算法
                         </el-button>
                         <el-button type="success" @click="exportAlo()">
-                            <el-icon><Download /></el-icon>
+                            <el-icon>
+                                <Download />
+                            </el-icon>
                             导出算法库
                         </el-button>
                     </div>
@@ -23,10 +27,9 @@
 
 <script setup lang="ts">
 import { ref, onMounted, nextTick, onActivated } from 'vue'
-import { useRouter, onBeforeRouteUpdate } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { useWebSocket } from '@/composables/useWebSocket'
-import { useAlgorithmStore } from '../../store/algorithm'
 
 // handsontable
 import { HotTable } from '@handsontable/vue3'
@@ -38,7 +41,6 @@ registerAllModules()
 
 const router = useRouter()
 const { sendCommand, setMessageHandler } = useWebSocket()
-const store = useAlgorithmStore()
 
 // Refs
 const hot = ref<any>(null)

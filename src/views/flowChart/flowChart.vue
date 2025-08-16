@@ -700,7 +700,7 @@ const newGraph = (width: number, height: number) => {
     height: containerHeight,
 
     // 数据
-    data: data.value,
+    // data: data.value,
 
     // 插件配置
     plugins: [contextMenu],
@@ -715,77 +715,77 @@ const newGraph = (width: number, height: number) => {
     },
 
     // 节点配置 - 使用最简单的rect样式
-    node: {
-      type: 'rect',
-      style: (model: any) => {
-        const { data } = model;
-        const isAlgorithm = model.id.startsWith('alo');
-        const isSystem = model.id.startsWith('sys');
-        const isProduct = model.id.startsWith('pro');
+    // node: {
+    //   type: 'rect',
+    //   style: (model: any) => {
+    //     const { data } = model;
+    //     const isAlgorithm = model.id.startsWith('alo');
+    //     const isSystem = model.id.startsWith('sys');
+    //     const isProduct = model.id.startsWith('pro');
 
-        // 确定节点类型和颜色
-        let nodeColor = '#52c41a';
-        let nodeTypeName = '算法';
-        if (isSystem) {
-          nodeColor = '#1890ff';
-          nodeTypeName = '系统';
-        } else if (isProduct) {
-          nodeColor = '#fa8c16';
-          nodeTypeName = '产品';
-        }
+    //     // 确定节点类型和颜色
+    //     let nodeColor = '#52c41a';
+    //     let nodeTypeName = '算法';
+    //     if (isSystem) {
+    //       nodeColor = '#1890ff';
+    //       nodeTypeName = '系统';
+    //     } else if (isProduct) {
+    //       nodeColor = '#fa8c16';
+    //       nodeTypeName = '产品';
+    //     }
 
-        // 构建显示文本
-        let displayName = data?.label || '未命名';
-        if (displayName.length > 10) {
-          displayName = displayName.substring(0, 10) + '...';
-        }
+    //     // 构建显示文本
+    //     let displayName = data?.label || '未命名';
+    //     if (displayName.length > 10) {
+    //       displayName = displayName.substring(0, 10) + '...';
+    //     }
 
-        // 构建详细信息文本
-        let detailText = '';
-        if (isAlgorithm) {
-          const desc = data.description || '无';
-          detailText = desc.length > 12 ? desc.substring(0, 12) + '...' : desc;
-        } else {
-          detailText = `R:${formatNumber(data.R)} DR:${formatNumber(data.DR)}\nH:${formatNumber(data.H)} Z:${formatNumber(data.Z)}`;
-        }
+    //     // 构建详细信息文本
+    //     let detailText = '';
+    //     if (isAlgorithm) {
+    //       const desc = data.description || '无';
+    //       detailText = desc.length > 12 ? desc.substring(0, 12) + '...' : desc;
+    //     } else {
+    //       detailText = `R:${formatNumber(data.R)} DR:${formatNumber(data.DR)}\nH:${formatNumber(data.H)} Z:${formatNumber(data.Z)}`;
+    //     }
 
-        // 组合显示文本
-        const combinedText = `${displayName}\n[${nodeTypeName}]\n${detailText}`;
+    //     // 组合显示文本
+    //     const combinedText = `${displayName}\n[${nodeTypeName}]\n${detailText}`;
 
-        return {
-          size: [200, 60],
-          fill: nodeColor,
-          stroke: '#ffffff',
-          lineWidth: 2,
-          radius: 6,
-          cursor: 'pointer',
-          labelText: combinedText,
-          labelFill: '#ffffff',
-          labelFontSize: 10,
-          labelFontWeight: 'bold',
-          labelTextAlign: 'center',
-          labelTextBaseline: 'middle',
-          labelLineHeight: 12,
-          labelPlacement: 'center'
-        };
-      },
-      state: {
-        selected: {
-          stroke: '#ffff00',
-          lineWidth: 3,
-        }
-      }
-    },
+    //     return {
+    //       size: [200, 60],
+    //       fill: nodeColor,
+    //       stroke: '#ffffff',
+    //       lineWidth: 2,
+    //       radius: 6,
+    //       cursor: 'pointer',
+    //       labelText: combinedText,
+    //       labelFill: '#ffffff',
+    //       labelFontSize: 10,
+    //       labelFontWeight: 'bold',
+    //       labelTextAlign: 'center',
+    //       labelTextBaseline: 'middle',
+    //       labelLineHeight: 12,
+    //       labelPlacement: 'center'
+    //     };
+    //   },
+    //   state: {
+    //     selected: {
+    //       stroke: '#ffff00',
+    //       lineWidth: 3,
+    //     }
+    //   }
+    // },
 
     // 边配置 - 简化
-    edge: {
-      type: 'line',
-      style: {
-        stroke: '#ccc',
-        lineWidth: 1,
-        endArrow: true,
-      }
-    },
+    // edge: {
+    //   type: 'line',
+    //   style: {
+    //     stroke: '#ccc',
+    //     lineWidth: 1,
+    //     endArrow: true,
+    //   }
+    // },
 
     // behaviors: [{
     //   type: 'click-select',

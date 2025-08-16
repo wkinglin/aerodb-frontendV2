@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, ipcMain } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -26,8 +26,16 @@ let win: BrowserWindow | null
 function createWindow() {
   win = new BrowserWindow({
     icon: path.join(process.env.VITE_PUBLIC, 'electron-vite.svg'),
+    frame: false, // 移除原生标题栏
+    titleBarStyle: 'hidden', // 隐藏标题栏
+    width: 1200,
+    height: 800,
+    minWidth: 800,
+    minHeight: 600,
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
+      nodeIntegration: false,
+      contextIsolation: true,
     },
     // fullscreen: true,
   })
@@ -66,3 +74,26 @@ app.on('activate', () => {
 })
 
 app.whenReady().then(createWindow)
+
+// IPC handlers for window controls
+ipcMain.on('window-min', () => {
+  if (win) {
+    win.minimize()
+  }
+})
+
+ipcMain.on('window-max', () => {
+  if (win) {
+    if (win.isMaximized()) {
+      win.unmaximize()
+    } else {
+      win.maximize()
+    }
+  }
+})
+
+ipcMain.on('window-close', () => {
+  if (win) {
+    win.close()
+  }
+})

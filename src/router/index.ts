@@ -83,7 +83,7 @@ const routes: RouteRecordRaw[] = [
                 name: '查看产品树',
                 component: FlowChart,
                 meta: {
-                    keepAlive: false,
+                    keepAlive: true,
                     title: '查看产品树'
                 }
             },
@@ -101,7 +101,7 @@ const routes: RouteRecordRaw[] = [
                 name: '自定义框图',
                 component: SeeRect,
                 meta: {
-                    keepAlive: false,
+                    keepAlive: true,
                     title: '自定义框图'
                 }
             },
@@ -110,7 +110,7 @@ const routes: RouteRecordRaw[] = [
                 name: '查看框图',
                 component: Rectangle,
                 meta: {
-                    keepAlive: false,
+                    keepAlive: true,
                     title: '查看框图'
                 }
             },

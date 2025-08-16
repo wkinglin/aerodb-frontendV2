@@ -65,16 +65,19 @@
         </el-card>
 
         <!-- 新建框图对话框 -->
-        <el-dialog title="新建框图" v-model="dialogVisible" width="600px" center :before-close="handleClose" class="create-rect-dialog">
-            <el-form ref="formRef" :model="createRectForm" :rules="rules" label-width="100px" class="create-form">
+        <el-dialog title="新建框图" v-model="dialogVisible" width="600px" center :before-close="handleClose"
+            class="create-rect-dialog">
+            <el-form ref="formRef" :model="createRectForm" label-width="100px" class="create-form">
                 <el-form-item label="框图所属系统" prop="sysId">
-                    <el-select v-model="createRectForm.sysId" placeholder="请选择框图所属系统" @change="handleSysChange" style="width: 100%;">
-                        <el-option v-for="item in systemList" :key="item.id" :label="item.name" :value="item.id" />
+                    <el-select v-model="createRectForm.sysId" placeholder="请选择框图所属系统" @change="handleSysChange"
+                        style="width: 100%;">
+                        <el-option v-for="item in validSystemList" :key="item.id" :label="item.name" :value="item.id" />
                     </el-select>
                 </el-form-item>
                 <el-form-item label="框图所属产品" prop="proId" v-if="createRectForm.sysId">
                     <el-select v-model="createRectForm.proId" placeholder="请选择框图所属产品" style="width: 100%;">
-                        <el-option v-for="item in productList" :key="item.id" :label="item.name" :value="item.id" />
+                        <el-option v-for="item in validProductList" :key="item.id" :label="item.name"
+                            :value="item.id" />
                     </el-select>
                 </el-form-item>
                 <el-form-item label="框图备注" prop="message">
@@ -94,7 +97,7 @@
 
         <!-- 编辑框图对话框 -->
         <el-dialog title="编辑框图" v-model="editDialogVisible" width="500px" center :before-close="handleEditClose">
-            <el-form ref="editFormRef" :model="editFormData" :rules="rules" label-width="80px">
+            <el-form ref="editFormRef" :model="editFormData" label-width="80px">
                 <el-form-item label="框图名称" prop="name">
                     <el-input v-model="editFormData.name" placeholder="请输入框图名称" clearable maxlength="50"
                         show-word-limit />
@@ -117,13 +120,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onActivated } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { ref, reactive, onActivated, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
     Plus,
     Delete,
-    Edit,
     View,
     Document,
     Calendar,
@@ -131,7 +133,7 @@ import {
 } from '@element-plus/icons-vue'
 import { useWebSocket } from '@/composables/useWebSocket'
 
-import { System, Pro, Alo } from './nodes.ts'
+import { System, Pro, } from './nodes.ts'
 // 接口定义
 interface RectItem {
     id: string | number
@@ -169,16 +171,29 @@ const createRectForm = ref({
 const systemList = ref<System[]>([])
 const productList = ref<Pro[]>([])
 
-// 表单验证规则
-const rules = reactive({
-    name: [
-        { required: true, message: '请输入框图名称', trigger: 'blur' },
-        { min: 1, max: 50, message: '名称长度在1到50个字符', trigger: 'blur' },
-        { pattern: /^[a-zA-Z0-9_\u4e00-\u9fa5\s]+$/, message: '只能包含字母、数字、下划线、中文和空格', trigger: 'blur' }
-    ],
-    message: [
-        { max: 200, message: '备注长度不能超过200个字符', trigger: 'blur' }
-    ]
+// 计算属性：过滤有效的系统和产品数据
+const validSystemList = computed(() => {
+    return systemList.value.filter(item =>
+        item &&
+        typeof item === 'object' &&
+        item.id !== undefined &&
+        item.id !== null &&
+        item.name !== undefined &&
+        item.name !== null &&
+        item.name !== ''
+    )
+})
+
+const validProductList = computed(() => {
+    return productList.value.filter(item =>
+        item &&
+        typeof item === 'object' &&
+        item.id !== undefined &&
+        item.id !== null &&
+        item.name !== undefined &&
+        item.name !== null &&
+        item.name !== ''
+    )
 })
 
 // 获取实例
@@ -189,12 +204,27 @@ const { sendCommand, setMessageHandler } = useWebSocket()
 
 // 生命周期
 onActivated(() => {
-    setMessageHandler(getMessage)
-    sendCommand("findAllGraph")
+    // 先获取系统数据
+    setMessageHandler(getData)
+    sendCommand("systemAll")
+
+    // 延迟获取框图列表
+    setTimeout(() => {
+        setMessageHandler(getMessage)
+        sendCommand("findAllGraph")
+    }, 200)
 })
 
 // 接收WebSocket消息
 const getMessage = (msg: MessageEvent) => {
+    if (msg.data === "delete success") {
+        ElMessage({
+            message: '删除成功',
+            type: 'success'
+        });
+        return
+    }
+
     try {
         const parsedData = JSON.parse(msg.data)
         if (Array.isArray(parsedData)) {
@@ -213,17 +243,47 @@ const getMessage = (msg: MessageEvent) => {
         creating.value = false
         updating.value = false
 
-        setMessageHandler(getData)
-        sendCommand("systemAll")
+        // 获取系统数据，但不覆盖当前的消息处理器
+        if (systemList.value.length === 0) {
+            setMessageHandler(getData)
+            sendCommand("systemAll")
+        }
     }
 }
 
 const getData = (msg: MessageEvent) => {
-    systemList.value = JSON.parse(msg.data)
+    // console.log('接收到系统数据:', msg.data)
+    if (msg.data === "delete success") {
+        ElMessage({
+            message: '删除成功',
+            type: 'success'
+        });
+        // 刷新框图列表
+        setMessageHandler(getMessage)
+        sendCommand("findAllGraph")
+        return
+    }
+
+    try {
+        const parsedData = JSON.parse(msg.data)
+        systemList.value = Array.isArray(parsedData) ? parsedData : []
+
+        // 恢复框图列表消息处理器
+        setMessageHandler(getMessage)
+    } catch (error) {
+        console.error('解析系统数据失败:', error)
+        systemList.value = []
+        // 恢复框图列表消息处理器
+        setMessageHandler(getMessage)
+    }
 }
 
 const handleSysChange = (value: string) => {
-    productList.value = systemList.value.find((item: System) => item.id === Number(value))?.pro || []
+    const system = systemList.value.find((item: System) => item.id === Number(value))
+    productList.value = system?.pro || []
+
+    // 重置产品选择，因为系统变了，之前选择的产品可能不再有效
+    createRectForm.value.proId = ''
 }
 
 // 业务方法
@@ -241,23 +301,10 @@ const seePicture = (index: number) => {
             pictureName: item.name,
             id: item.id.toString(),
             isSystem: (item.proId === -1).toString(),
-            sysId: item.sysId?.toString() || '',
-            proId: item.proId?.toString() || ''
+            sysId: item.sysId?.toString() || '-1',
+            proId: item.proId?.toString() || '-1'
         }
     })
-}
-
-const editPicture = (index: number) => {
-    const item = rectList.value[index]
-    if (!item) {
-        ElMessage.error('框图不存在')
-        return
-    }
-
-    editingIndex.value = index
-    editFormData.name = item.name
-    editFormData.message = item.message
-    editDialogVisible.value = true
 }
 
 const deletePicture = (index: number) => {
@@ -274,6 +321,7 @@ const deletePicture = (index: number) => {
     }).then(() => {
         sendCommand("deleteGraph")
         sendCommand(item.id.toString())
+        rectList.value = rectList.value.filter((rect: RectItem) => rect.id != item.id)
     }).catch(() => {
         // 用户取消删除
     })
@@ -303,13 +351,24 @@ const submitCreate = async () => {
         sendCommand(JSON.stringify({
             name: createRectForm.value.name.trim(),
             message: createRectForm.value.message.trim(),
-            sysId: createRectForm.value.sysId,
-            proId: createRectForm.value.proId
+            sysId: createRectForm.value.sysId || -1,
+            proId: createRectForm.value.proId || -1
         }))
 
         // 关闭对话框并重置表单
+        ElMessage({
+            message: '创建成功',
+            type: 'success'
+        });
+
         dialogVisible.value = false
         resetForm()
+
+        // 刷新框图列表
+        setTimeout(() => {
+            setMessageHandler(getMessage)
+            sendCommand("findAllGraph")
+        }, 500) // 延迟一点确保后端处理完成
     } catch (error) {
         console.error('创建失败:', error)
         creating.value = false
@@ -362,7 +421,14 @@ const submitEdit = async () => {
 
 const cancelCreate = () => {
     dialogVisible.value = false
-    resetForm()
+    // 取消时完全重置表单
+    createRectForm.value = {
+        name: '',
+        sysId: '',
+        proId: '',
+        message: ''
+    }
+    productList.value = [] // 清空产品列表
 }
 
 const cancelEdit = () => {
@@ -371,9 +437,11 @@ const cancelEdit = () => {
 }
 
 const resetForm = () => {
+    // 保留系统选择，只清空产品和备注
+    const currentSysId = createRectForm.value.sysId
     createRectForm.value = {
         name: '',
-        sysId: '',
+        sysId: currentSysId, // 保留当前选择的系统
         proId: '',
         message: ''
     }
@@ -388,7 +456,14 @@ const resetEditForm = () => {
 const handleClose = (done: any) => {
     ElMessageBox.confirm('确认关闭？未保存的数据将丢失。')
         .then(() => {
-            resetForm()
+            // 完全重置表单
+            createRectForm.value = {
+                name: '',
+                sysId: '',
+                proId: '',
+                message: ''
+            }
+            productList.value = [] // 清空产品列表
             done()
         })
         .catch(() => { })

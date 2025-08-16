@@ -28,6 +28,13 @@ export function useWebSocket() {
   }
 
   /**
+   * 清除消息处理器
+   */
+  const clearMessageHandler = () => {
+    globalWebSocket.clearMessageHandler()
+  }
+
+  /**
    * 发送JSON数据
    * @param data 要发送的数据对象
    * @returns 发送是否成功
@@ -57,9 +64,7 @@ export function useWebSocket() {
 
   // 组件卸载时清理消息处理器
   onUnmounted(() => {
-    if (globalWebSocket.ws) {
-      globalWebSocket.ws.onmessage = null
-    }
+    clearMessageHandler()
   })
 
   return {
@@ -68,6 +73,7 @@ export function useWebSocket() {
     send,
     sendJSON,
     sendCommand,
-    setMessageHandler
+    setMessageHandler,
+    clearMessageHandler
   }
 }
